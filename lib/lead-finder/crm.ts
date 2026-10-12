@@ -319,6 +319,8 @@ export async function upsertScannedBusiness(
         .select({
           id: leadBusinesses.id,
           kgmid: leadBusinesses.kgmid,
+          placeId: leadBusinesses.placeId,
+          cid: leadBusinesses.cid,
           email: leadBusinesses.email,
           contactId: leadBusinesses.contactId,
           dealId: leadBusinesses.dealId,
@@ -342,8 +344,11 @@ export async function upsertScannedBusiness(
         .update(leadBusinesses)
         .set({
           ...businessColumns(business),
-          // Keep a KGMID once known; only fill it if it was missing.
+          // Stable identifiers are never overwritten once known (that would break
+          // dedupe for the next scan); they are only filled in when missing.
           kgmid: row.kgmid ?? business.kgmid,
+          placeId: row.placeId ?? business.placeId,
+          cid: row.cid ?? business.cid,
           email: business.email ?? row.email,
           lastSeenScanId: scanId,
           updatedAt: now,
