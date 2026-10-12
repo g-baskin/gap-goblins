@@ -41,7 +41,7 @@ function parseFlags(argv: string[]): CliFlags {
     event: "BOOKING_CREATED",
     bookingId: `outreach-test-${crypto.randomUUID()}`,
     startTime: tomorrowAt10AmSydney(),
-    url: process.env.WEBHOOK_URL || "http://localhost:3500/api/webhooks/cal",
+    url: process.env.WEBHOOK_URL || "http://localhost:3510/api/webhooks/cal",
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -101,7 +101,7 @@ Flags:
                          (default: BOOKING_CREATED)
   --booking-id <id>      Cal.com booking UID (default: random UUID)
   --start-time <iso>     Booking start time (default: tomorrow 10am Sydney)
-  --url <url>            Webhook URL (default: http://localhost:3500/api/webhooks/cal)
+  --url <url>            Webhook URL (default: http://localhost:3510/api/webhooks/cal)
   -h, --help             Show this message
 `);
 }

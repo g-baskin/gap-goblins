@@ -1,5 +1,7 @@
 # Handoff Guide
 
+> **Gap Goblins note.** This guide was inherited from online-crm-ai@eabca74 (see `PROVENANCE.md`). Gap Goblins runs on dev port **3510**, Postgres **5442** (database `gap_goblins`, container `gap-goblins-postgres`) and S3 storage **9010/9011** (container `gap-goblins-minio`, SeaweedFS because MinIO's free images were withdrawn in Sept 2026), so it can run beside online-crm-ai (3500 / 5432 / 9000). Hosted CI is off; the local gate is `bun run lint && bun run typecheck && bun run typecheck:worker && bun run test:run && bun run build`. Lead Finder settings: `OMKAR_DESKTOP_API_URL`, `OMKAR_DESKTOP_TIMEOUT_MS`, `LEAD_SCAN_MAX_RESULTS_CAP` (see `.env.example`). Resend is for system email only; it never sends prospect outreach.
+
 This is a Next.js 16 admin platform with outreach (cold email), a newsletter
 pipeline, CRM, and a pg-boss worker. It was forked from a branded internal tool
 and stripped to a generic state — all brand strings, secrets, and personal info
@@ -43,11 +45,11 @@ cp .env.example .env.local
 bun run db:push
 
 # Run it
-bun run dev          # web app on http://localhost:3500
+bun run dev          # web app on http://localhost:3510
 bun run worker       # pg-boss worker (separate terminal — for outreach sends & newsletter jobs)
 ```
 
-Visit http://localhost:3500/admin — you'll hit the login page. There's no seed
+Visit http://localhost:3510/admin — you'll hit the login page. There's no seed
 user yet; create one via the database (section 5) or wire up your own signup
 route.
 
@@ -62,9 +64,9 @@ copy it, then fill in real values for the ones you need.
 
 | Var | What to put | Notes |
 |---|---|---|
-| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/postgres` | Matches `docker-compose.yml` defaults |
+| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5442/gap_goblins` | Matches `docker-compose.yml` defaults |
 | `AUTH_SECRET` | `openssl rand -base64 32` | Required by NextAuth |
-| `NEXT_PUBLIC_SITE_URL` | `http://localhost:3500` | Used in email templates & previews |
+| `NEXT_PUBLIC_SITE_URL` | `http://localhost:3510` | Used in email templates & previews |
 | `BUCKET_*` | Defaults in `.env.example` work with the bundled MinIO | Bucket name `media` is auto-created |
 
 ### To send email (optional in dev)

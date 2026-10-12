@@ -1,4 +1,42 @@
-# Admin Platform
+<!-- gg:init:start -->
+# Gap Goblins
+
+Local-business lead finder: niche + location → businesses → weakest-online-presence score → CRM prospect → branded "gap report" PDF. Product #4 of the owner's four-product ecosystem.
+
+## Current state
+
+- Bootstrapped from online-crm-ai@eabca74 with fresh history (`PROVENANCE.md`); its own git repo, remote `g-baskin/gap-goblins` (private). `main` = bootstrap, `dev` from main, Milestone 1 on `feat/m1-scan-score-report`.
+- Active spec: `_planning/01-m0-m1-build-prompt.md` (wins over `_planning/00-original-brief.md`). Recon: `_planning/phase-0-recon.md`.
+- The inherited notes below the fenced block describe the online-crm-ai base; Gap Goblins ports are 3510 / 5442 / 9010-9011.
+
+Read CONTEXT.md before naming anything. Hard-to-reverse decisions are recorded in `docs/adr/`.
+
+## Hard rules (owner decisions, final)
+
+- **Never modify `online-crm-ai`** (no checkout, stash, commit or edits). It has uncommitted work on `fix/automation-release-review`. Read it only with `git -C … show/ls-tree/archive <sha>`. Prove it is untouched by comparing `git status --porcelain | shasum` before and after.
+- **Licenses:** you may copy from online-crm-ai, g-baskin/Legend-Copy-AI, omkarcloud/google-maps-scraper (docs only), hitb1099/outreach-os, quionie/outreach-ai and AbdelftahZowail/Quickly (all MIT). pypesdev/coldflow is GPL-3.0: never copy it or closely paraphrase it. Never touch LegendCopy or voice-agent-template (AGPL).
+- **Resend is for system/transactional email only.** Never use it for prospect outreach, because its Acceptable Use Policy bans cold email and scraped data. Outreach in Milestone 2 goes through tenants' connected Gmail/M365 mailboxes on separate domains. Milestone 1 sends no email to prospects at all.
+- **No direct Google Maps scraping.** Leads come only through `LeadSource` adapters: `fixture`, `csv-import` (omkar exports + generic CSV) and `omkar-desktop` (local API via `fetch`; do not add the `botasaurus-desktop-api` package).
+- No fake results. If a contract can't be verified, disable the feature with an explicit error and mark it UNVERIFIED.
+- Ask the owner before: any new npm dependency (the one exception is moving `playwright` to dependencies), a new external service, Dockerfile/deploy changes, deleting features, force-pushing, or making anything public.
+- New tables need `tenant_id NOT NULL` with an FK and tenant-leading indexes. Use additive migrations only.
+- The legacy `outreach_*` tables, `site_settings`, `admin_settings` and `integration_credentials` in the base repo are **not tenant-scoped**. Don't use them for tenant data (for example, branding goes in `tenant_branding`).
+
+## Local environment gotchas
+
+- Ports 5432, 9000 and 3500 (online-crm-ai) are already taken on this machine, as are the containers named `app-postgres`/`app-minio`. Gap Goblins uses dev port 3510, Postgres 5442, MinIO 9010/9011, containers `gap-goblins-postgres`/`gap-goblins-minio` and database `gap_goblins`.
+- omkar Google Maps Extractor (desktop app in /Applications) binds `*:8000`, but a Docker uvicorn service, `fastapi-click-api`, holds `127.0.0.1:8000`. So `localhost:8000` reaches the wrong service. Read `OMKAR_DESKTOP_API_URL`, never hardcode the port, and have the health check confirm the response really comes from omkar.
+- omkar data: `KGMID` is the only field that is always unique and non-null (`PLACE_ID` can be missing). Dedupe order: kgmid → place_id → cid → phone_e164 → gbp_url. Emails come only from omkar's paid enrichment.
+- Hosted CI is unpaid. Move `.github/workflows/*` and `dependabot.yml` to `docs/reference/disabled-github-config/` (move them, don't delete them). The local gate, in order: `bun run lint && bun run typecheck && bun run typecheck:worker && bun run test:run && bun run build`. Record baseline failures before making changes.
+
+## Domain invariants (Milestone 1)
+
+- The scoring rubric lives in `lib/lead-finder/scoring-config.ts` with `RUBRIC_VERSION`. Each flag is true, false or `"unknown"`. Unknown scores 0 and displays as "Not checked". `gbp_unclaimed` and `gbp_thin` are mutually exclusive, so the +40 counts once.
+- Re-scans never duplicate contacts or deals and never move a deal's stage backward.
+- Report copy comes from deterministic templates (no LLM): no guarantees, no invented stats, no named competitors. Render the PDF with Playwright in the worker, with JavaScript disabled and the network blocked (the logo is a data URI). Escape all scraped text. PDFs live under tenant-prefixed keys and are served only through tenant-checked routes.
+<!-- gg:init:end -->
+
+# Inherited base notes (online-crm-ai@eabca74)
 
 Bun/Next.js admin console for CRM pipeline management, outreach campaigns and replies, newsletters, automation flows, media/settings, and admin user management. Public `/` redirects to `/admin`; admin pages are protected by `proxy.ts` and NextAuth credentials auth.
 
@@ -27,7 +65,7 @@ Bun/Next.js admin console for CRM pipeline management, outreach campaigns and re
 
 - `bun install` — install dependencies from `bun.lock`.
 - `docker compose up -d postgres minio` — start local Postgres and MinIO; `minio-setup` creates the `media` bucket.
-- `bun run dev` — Next dev server on port `3500`.
+- `bun run dev` — Next dev server on port `3510`.
 - `bun run worker` — run `scripts/worker.ts` with Bun and `react-server` conditions.
 - `bun run db:migrate` / `bun run db:generate` / `bun run db:push` / `bun run db:studio` — Drizzle Kit commands.
 - `bun run db:seed` — run `scripts/seed-crm-pipeline.ts` against `.env.local`.
@@ -58,6 +96,4 @@ Bun/Next.js admin console for CRM pipeline management, outreach campaigns and re
 - `Dockerfile.worker` installs production deps and runs `bun --conditions react-server scripts/worker.ts`.
 - `railway.json` uses `Dockerfile`, starts the website with `node .next/standalone/server.js`, and healthchecks `/api/health`.
 - `railway.worker.json` uses `Dockerfile.worker`, starts the worker command, and restarts on failure.
-- CI runs on push/PR to `dev`, `qa`, and `main`: Bun install, Biome lint, format check, TypeScript, and Vitest.
-- `.github/workflows/branch-flow.yml` enforces PR promotion order: `dev -> qa`, then `qa -> main`.
-- Dependabot targets `dev` for Bun, GitHub Actions, and Docker updates.
+- Hosted CI is disabled; the old workflows and dependabot config are kept in `docs/reference/disabled-github-config/`. Local gate: `bun run lint && bun run typecheck && bun run typecheck:worker && bun run test:run && bun run build`.

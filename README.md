@@ -1,21 +1,32 @@
-# Online CRM AI
+# Gap Goblins
 
-[![Next.js](https://img.shields.io/badge/Next.js-16.2.6-black?style=flat&logo=next.js&logoColor=white)](https://nextjs.org/)
-[![React](https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react&logoColor=black)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Bun](https://img.shields.io/badge/Bun-1.3.14-black?style=flat&logo=bun&logoColor=white)](https://bun.sh/)
-[![Drizzle ORM](https://img.shields.io/badge/Drizzle_ORM-PostgreSQL-C5F74F?style=flat)](https://orm.drizzle.team/)
+> They find the gaps. You get the bag.
 
-> Commercial, US-first CRM in development, beginning with a contact-centered omnichannel Conversations workspace.
-> The current repository is an inherited Template CRM codebase with fresh Git history; the capabilities listed below exist but have not all been reworked into the Online CRM AI product architecture.
+Gap Goblins is a local-business lead finder. Pick a niche and a location (or upload a Google Maps Extractor export), and it finds businesses with the weakest online presence, scores each one, files it as a prospect in the CRM, and produces a branded "gap report" PDF that explains what the business is missing. It is product #4 of the owner's four-product ecosystem.
 
-## Product Direction
+## Relationship to online-crm-ai
 
-Online CRM AI is intended to become an independent replacement for GoHighLevel. Its first vertical slice unifies web chat, SMS, email, and call activity for one tenant, one agent, and one contact in a custom chronological timeline.
+Gap Goblins was bootstrapped from `g-baskin/online-crm-ai` at commit `eabca74` with **fresh git history** (see [`PROVENANCE.md`](PROVENANCE.md)). It reuses that codebase's tenancy, CRM (contacts, deals, pipelines), pg-boss worker, storage and admin shell. The two repositories evolve independently: nothing here is merged back into online-crm-ai, and online-crm-ai is never modified from this project.
 
-The product will own canonical tenant, contact, identity, thread, event, CRM, and workflow data. Chatwoot Community Edition (MIT) may be used initially only as a headless messaging gateway behind internal adapters. Voice remains independent behind a provider abstraction, initially targeting Twilio. Chatwoot Enterprise code and enterprise-only artifacts are out of bounds.
+Both apps can run side by side on one machine. Gap Goblins uses its own ports and containers:
 
-Planning: [`Feature #010 — Omnichannel Conversations Foundation`](library/requirements/features/feature-010-omnichannel-conversations-foundation/prd-feature-010-omnichannel-conversations-foundation.md).
+| Service | online-crm-ai | Gap Goblins |
+| --- | --- | --- |
+| Next dev server | 3500 | **3510** |
+| Postgres | 5432 (`app-postgres`) | **5442** (`gap-goblins-postgres`, db `gap_goblins`) |
+| S3 storage API / UI | 9000 / 9001 (`app-minio`, MinIO) | **9010 / 9011** (`gap-goblins-minio`, SeaweedFS) |
+
+Local S3 storage runs SeaweedFS (Apache-2.0) under the compose service name `minio`, because MinIO's free Docker images were withdrawn in September 2026. Keys, bucket (`media`) and env vars are unchanged; `docker compose up -d postgres minio minio-setup` starts everything.
+
+## Local quality gate
+
+Hosted CI is switched off (the old GitHub Actions config lives in `docs/reference/disabled-github-config/`). Run this before every commit:
+
+```bash
+bun run lint && bun run typecheck && bun run typecheck:worker && bun run test:run && bun run build
+```
+
+Planning docs: [`_planning/`](_planning/). Glossary: [`CONTEXT.md`](CONTEXT.md). Decisions: [`docs/adr/`](docs/adr/).
 
 ---
 
@@ -55,8 +66,8 @@ These are inherited starting points, not claims of completed omnichannel archite
 **Prerequisites:** Bun ≥ 1.3, Docker Desktop
 
 ```bash
-git clone <private-online-crm-ai-repository-url>
-cd online-crm-ai
+git clone git@github.com:g-baskin/gap-goblins.git
+cd gap-goblins
 bun install
 
 cp .env.example .env.local
@@ -68,7 +79,7 @@ bun run db:migrate
 bun run db:seed          # sales pipeline + stages
 bun scripts/create-admin.ts   # first super_admin user
 
-bun run dev              # http://localhost:3500 → /admin
+bun run dev              # http://localhost:3510 → /admin
 bun run worker           # separate terminal — outreach + newsletter jobs
 ```
 
@@ -79,7 +90,7 @@ See [`HANDOFF.md`](HANDOFF.md) for full env reference, placeholder token replace
 ## Scripts
 
 ```bash
-bun run dev              # Dev server (:3500)
+bun run dev              # Dev server (:3510)
 bun run build            # Production build
 bun run start            # Production server
 bun run lint             # Biome check

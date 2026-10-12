@@ -253,7 +253,7 @@ export async function renderAutomationEmail(
 export function buildAutomationUnsubscribeUrl(
   enrollment: Pick<typeof automationEnrollments.$inferSelect, "id">,
 ): string {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3500";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3510";
   const url = new URL(`/api/automation/unsubscribe/${enrollment.id}`, siteUrl);
   url.searchParams.set("token", buildAutomationUnsubscribeToken(enrollment.id));
   return url.href;
