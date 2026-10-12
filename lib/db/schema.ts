@@ -2017,3 +2017,220 @@ export const automationTenantAssignmentAudits = pgTable(
     ),
   ],
 );
+
+// ============================================================================
+// Gap Goblins: Lead Finder (Milestone 1)
+// Every table is tenant-scoped: tenant_id NOT NULL + FK, tenant-leading indexes.
+// ============================================================================
+
+export const leadScanStatuses = ["queued", "running", "completed", "failed", "cancelled"] as const;
+export type LeadScanStatus = (typeof leadScanStatuses)[number];
+
+export const leadScans = pgTable(
+  "lead_scans",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    niche: text("niche").notNull(),
+    location: text("location").notNull(),
+    maxResults: integer("max_results").notNull().default(50),
+    source: text("source").notNull(),
+    sourceFileKey: text("source_file_key"),
+    sourceFileName: text("source_file_name"),
+    status: text("status").$type<LeadScanStatus>().notNull().default("queued"),
+    foundCount: integer("found_count").notNull().default(0),
+    processedCount: integer("processed_count").notNull().default(0),
+    createdCount: integer("created_count").notNull().default(0),
+    updatedCount: integer("updated_count").notNull().default(0),
+    skippedClosedCount: integer("skipped_closed_count").notNull().default(0),
+    errorCount: integer("error_count").notNull().default(0),
+    errorMessage: text("error_message"),
+    createdBy: uuid("created_by").references(() => adminUsers.id),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "string" }),
+    completedAt: timestamp("completed_at", { withTimezone: true, mode: "string" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("lead_scans_tenant_id_unique_idx").on(table.tenantId, table.id),
+    index("lead_scans_tenant_created_idx").on(table.tenantId, table.createdAt),
+    index("lead_scans_tenant_status_idx").on(table.tenantId, table.status),
+    check(
+      "lead_scans_status_check",
+      sql`${table.status} in ('queued', 'running', 'completed', 'failed', 'cancelled')`,
+    ),
+    check("lead_scans_max_results_check", sql`${table.maxResults} between 1 and 1000`),
+  ],
+);
+
+export const leadBusinesses = pgTable(
+  "lead_businesses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    kgmid: text("kgmid"),
+    placeId: text("place_id"),
+    cid: text("cid"),
+    name: text("name").notNull(),
+    mainCategory: text("main_category"),
+    address: text("address"),
+    phoneRaw: text("phone_raw"),
+    phoneE164: text("phone_e164"),
+    website: text("website"),
+    gbpUrl: text("gbp_url"),
+    rating: real("rating"),
+    reviewCount: integer("review_count"),
+    imageCount: integer("image_count"),
+    canClaim: boolean("can_claim"),
+    hasDescription: boolean("has_description"),
+    hasHours: boolean("has_hours"),
+    ownerPostsCount: integer("owner_posts_count"),
+    isPermanentlyClosed: boolean("is_permanently_closed"),
+    isTemporarilyClosed: boolean("is_temporarily_closed"),
+    email: text("email"),
+    rawPayload: jsonb("raw_payload"),
+    contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+    dealId: uuid("deal_id").references(() => deals.id, { onDelete: "set null" }),
+    firstSeenScanId: uuid("first_seen_scan_id").references(() => leadScans.id),
+    lastSeenScanId: uuid("last_seen_scan_id").references(() => leadScans.id),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("lead_businesses_tenant_id_unique_idx").on(table.tenantId, table.id),
+    uniqueIndex("lead_businesses_tenant_kgmid_unique_idx")
+      .on(table.tenantId, table.kgmid)
+      .where(sql`${table.kgmid} is not null`),
+    index("lead_businesses_tenant_place_id_idx").on(table.tenantId, table.placeId),
+    index("lead_businesses_tenant_cid_idx").on(table.tenantId, table.cid),
+    index("lead_businesses_tenant_phone_idx").on(table.tenantId, table.phoneE164),
+    index("lead_businesses_tenant_gbp_url_idx").on(table.tenantId, table.gbpUrl),
+    index("lead_businesses_tenant_contact_idx").on(table.tenantId, table.contactId),
+  ],
+);
+
+export const leadScanResults = pgTable(
+  "lead_scan_results",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    scanId: uuid("scan_id")
+      .notNull()
+      .references(() => leadScans.id, { onDelete: "cascade" }),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => leadBusinesses.id, { onDelete: "cascade" }),
+    score: integer("score").notNull(),
+    flags: jsonb("flags").notNull(),
+    rubricVersion: text("rubric_version").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("lead_scan_results_tenant_id_unique_idx").on(table.tenantId, table.id),
+    uniqueIndex("lead_scan_results_scan_business_unique_idx").on(table.scanId, table.businessId),
+    index("lead_scan_results_tenant_scan_score_idx").on(table.tenantId, table.scanId, table.score),
+    index("lead_scan_results_tenant_business_idx").on(
+      table.tenantId,
+      table.businessId,
+      table.createdAt,
+    ),
+    foreignKey({
+      columns: [table.tenantId, table.scanId],
+      foreignColumns: [leadScans.tenantId, leadScans.id],
+      name: "lead_scan_results_tenant_scan_fk",
+    }),
+    foreignKey({
+      columns: [table.tenantId, table.businessId],
+      foreignColumns: [leadBusinesses.tenantId, leadBusinesses.id],
+      name: "lead_scan_results_tenant_business_fk",
+    }),
+    check("lead_scan_results_score_check", sql`${table.score} between 0 and 100`),
+  ],
+);
+
+export const tenantBranding = pgTable(
+  "tenant_branding",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    companyName: text("company_name"),
+    logoStorageKey: text("logo_storage_key"),
+    primaryColor: text("primary_color"),
+    accentColor: text("accent_color"),
+    ctaHeadline: text("cta_headline"),
+    ctaBody: text("cta_body"),
+    ctaUrl: text("cta_url"),
+    contactEmail: text("contact_email"),
+    contactPhone: text("contact_phone"),
+    website: text("website"),
+    physicalAddress: text("physical_address"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [uniqueIndex("tenant_branding_tenant_unique_idx").on(table.tenantId)],
+);
+
+export const leadReports = pgTable(
+  "lead_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => leadBusinesses.id, { onDelete: "cascade" }),
+    scanResultId: uuid("scan_result_id")
+      .notNull()
+      .references(() => leadScanResults.id, { onDelete: "cascade" }),
+    storageKey: text("storage_key").notNull(),
+    rubricVersion: text("rubric_version").notNull(),
+    generatedBy: uuid("generated_by").references(() => adminUsers.id),
+    generatedAt: timestamp("generated_at", { withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("lead_reports_tenant_business_idx").on(
+      table.tenantId,
+      table.businessId,
+      table.generatedAt,
+    ),
+    foreignKey({
+      columns: [table.tenantId, table.businessId],
+      foreignColumns: [leadBusinesses.tenantId, leadBusinesses.id],
+      name: "lead_reports_tenant_business_fk",
+    }),
+    foreignKey({
+      columns: [table.tenantId, table.scanResultId],
+      foreignColumns: [leadScanResults.tenantId, leadScanResults.id],
+      name: "lead_reports_tenant_scan_result_fk",
+    }),
+    check(
+      "lead_reports_storage_key_tenant_check",
+      sql`${table.storageKey} like 'tenants/' || ${table.tenantId}::text || '/%'`,
+    ),
+  ],
+);
