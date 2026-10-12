@@ -31,6 +31,18 @@ import {
   OUTREACH_DOMAIN_THROTTLE_DELAY_MINUTES,
   OUTREACH_MAX_EMAILS_PER_DOMAIN_PER_HOUR,
 } from "../lib/constants";
+import { db as workerDb } from "../lib/db/worker";
+import { renderReportPdf } from "../lib/lead-finder/report-pdf";
+import {
+  generateReport,
+  LEAD_REPORT_QUEUE,
+  type LeadReportJobPayload,
+} from "../lib/lead-finder/report-service";
+import {
+  LEAD_SCAN_QUEUE,
+  type LeadScanJobPayload,
+  runLeadScan,
+} from "../lib/lead-finder/scan-runner";
 import { processCleanupJob } from "../lib/newsletter/lib/queue/jobs/cleanup-job";
 // Job processors
 import { processCurateJob } from "../lib/newsletter/lib/queue/jobs/curate-job";
@@ -54,6 +66,7 @@ import { processDueEmails } from "../lib/outreach/sending/processor";
 import { sendEmail } from "../lib/outreach/sending/sender";
 import { type OutreachSendEmailPayload, QUEUE } from "../lib/queue/index";
 import { retryableWorker } from "../lib/queue/retryable-worker";
+import { workerDownloadFile, workerUploadFile } from "../lib/storage/worker";
 
 const OUTREACH_PROCESS_QUEUE = "outreach-process";
 const OUTREACH_PROCESS_CRON = "*/5 * * * *";
@@ -338,6 +351,27 @@ async function handleOutreachProcess(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Gap Goblins: Lead Finder
+// ---------------------------------------------------------------------------
+
+async function handleLeadScan(jobs: Job<LeadScanJobPayload>[]) {
+  for (const job of jobs) {
+    await runLeadScan(workerDb, job.data, {
+      loadSourceFile: async (key) => (await workerDownloadFile(key)).toString("utf8"),
+    });
+  }
+}
+
+async function handleLeadReport(jobs: Job<LeadReportJobPayload>[]) {
+  for (const job of jobs) {
+    await generateReport(workerDb, job.data, {
+      storage: { download: workerDownloadFile, upload: workerUploadFile },
+      renderPdf: renderReportPdf,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -347,7 +381,12 @@ async function main() {
 
   // pg-boss v10+ requires queues to exist before work() / send().
   // createQueue is idempotent — safe to call on every boot.
-  const allQueues = [...Object.values(QUEUE), OUTREACH_PROCESS_QUEUE];
+  const allQueues = [
+    ...Object.values(QUEUE),
+    OUTREACH_PROCESS_QUEUE,
+    LEAD_SCAN_QUEUE,
+    LEAD_REPORT_QUEUE,
+  ];
   for (const name of allQueues) {
     await boss.createQueue(name);
   }
@@ -389,6 +428,14 @@ async function main() {
     QUEUE.AUTOMATION_EXECUTE_NODE,
     opts,
     retryableWorker(QUEUE.AUTOMATION_EXECUTE_NODE, handleAutomationExecuteNode),
+  );
+
+  await boss.work(LEAD_SCAN_QUEUE, opts, retryableWorker(LEAD_SCAN_QUEUE, handleLeadScan));
+  // PDF rendering launches Chromium: one job at a time.
+  await boss.work(
+    LEAD_REPORT_QUEUE,
+    { ...opts, batchSize: 1 },
+    retryableWorker(LEAD_REPORT_QUEUE, handleLeadReport),
   );
 
   // Recurring outreach processor — fires every 5 min in-process via pg-boss schedule.
