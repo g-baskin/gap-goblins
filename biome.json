@@ -1,0 +1,84 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": ["**", "!lib/database.types.ts", "!**/*.css", "!**/*.html"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "correctness": {
+        "noUnusedVariables": "warn",
+        "noUnusedImports": "warn",
+        "noUnusedFunctionParameters": "warn",
+        "useExhaustiveDependencies": "warn",
+        "useHookAtTopLevel": "error",
+        "useParseIntRadix": "warn"
+      },
+      "suspicious": {
+        "noExplicitAny": "warn",
+        "noTsIgnore": "warn",
+        "noArrayIndexKey": "warn",
+        "noImplicitAnyLet": "warn",
+        "noGlobalIsNan": "warn",
+        "noThenProperty": "warn",
+        "useIterableCallbackReturn": "warn",
+        "noAssignInExpressions": "warn",
+        "noShadowRestrictedNames": "warn",
+        "noDocumentCookie": "warn"
+      },
+      "style": {
+        "useConst": "warn",
+        "useTemplate": "warn",
+        "useNodejsImportProtocol": "warn",
+        "noNonNullAssertion": "off"
+      },
+      "complexity": {
+        "useLiteralKeys": "warn",
+        "useOptionalChain": "warn",
+        "noUselessTernary": "warn",
+        "noUselessFragments": "warn",
+        "noUselessConstructor": "warn",
+        "noUselessCatch": "warn",
+        "noStaticOnlyClass": "warn"
+      },
+      "a11y": {
+        "useAltText": "warn",
+        "useValidAnchor": "warn",
+        "useKeyWithClickEvents": "warn",
+        "useButtonType": "warn",
+        "noStaticElementInteractions": "warn",
+        "noSvgWithoutTitle": "warn",
+        "useSemanticElements": "warn"
+      },
+      "performance": {
+        "noImgElement": "warn"
+      },
+      "security": {
+        "noDangerouslySetInnerHtml": "warn"
+      }
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "javascript": {
+    "jsxRuntime": "transparent"
+  }
+}

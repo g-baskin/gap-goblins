@@ -1,0 +1,2 @@
+ALTER TABLE "admin_users" ADD COLUMN "tokens_valid_from" timestamp with time zone;--> statement-breakpoint
+CREATE UNIQUE INDEX "admin_users_email_unique_idx" ON "admin_users" USING btree (lower("email"));

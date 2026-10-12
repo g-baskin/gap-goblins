@@ -1,0 +1,37 @@
+name: Branch Flow
+
+on:
+  pull_request:
+    branches: [qa, main]
+
+permissions:
+  contents: read
+
+jobs:
+  enforce-promotion-order:
+    name: Enforce promotion order
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR source branch
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+
+          case "$BASE_BRANCH" in
+            qa)
+              expected="dev"
+              ;;
+            main)
+              expected="qa"
+              ;;
+            *)
+              exit 0
+              ;;
+          esac
+
+          if [[ "$HEAD_BRANCH" != "$expected" ]]; then
+            echo "PRs into $BASE_BRANCH must come from $expected, got $HEAD_BRANCH."
+            exit 1
+          fi

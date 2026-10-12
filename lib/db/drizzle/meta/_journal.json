@@ -1,0 +1,104 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1774852451449,
+      "tag": "0000_icy_night_nurse",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777023974206,
+      "tag": "0001_slim_beyonder",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777523455082,
+      "tag": "0002_lean_jasper_sitwell",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1777523455083,
+      "tag": "0003_inbox_realtime_notify",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1777523455084,
+      "tag": "0004_outreach_sequence_templates",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1777523455085,
+      "tag": "0005_outreach_per_step_subject_templates",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1777523455086,
+      "tag": "0006_admin_settings_user_id_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1779926400000,
+      "tag": "0007_automation_autoresponder",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1779932927453,
+      "tag": "0008_repair_outreach_campaign_templates",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1779975940643,
+      "tag": "0009_massive_joseph",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1779997694214,
+      "tag": "0010_mighty_thena",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1780014849164,
+      "tag": "0011_steep_nick_fury",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788875103362,
+      "tag": "0012_omnichannel_persistence_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789013387792,
+      "tag": "0013_cynical_wolfsbane",
+      "breakpoints": true
+    }
+  ]
+}

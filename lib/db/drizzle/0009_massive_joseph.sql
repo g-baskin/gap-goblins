@@ -1,0 +1,1 @@
+ALTER TABLE "site_settings" ADD COLUMN "address_country" text;

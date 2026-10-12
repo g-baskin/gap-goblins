@@ -1,0 +1,12 @@
+# Repository-wide fallback owner. Later rules take precedence.
+* @g-baskin
+
+# High-risk and operational surfaces.
+/.github/ @g-baskin
+/app/api/ @g-baskin
+/lib/db/ @g-baskin
+/lib/security/ @g-baskin
+/proxy.ts @g-baskin
+/.env.example @g-baskin
+/Dockerfile* @g-baskin
+/railway*.json @g-baskin

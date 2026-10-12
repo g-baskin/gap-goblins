@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo/worker.tsbuildinfo"
+  },
+  "include": ["scripts/**/*.ts", "lib/**/*.ts", "emails/**/*.tsx", "components/email/**/*.tsx"],
+  "exclude": ["node_modules", ".vercel", ".next", "**/docs"]
+}
