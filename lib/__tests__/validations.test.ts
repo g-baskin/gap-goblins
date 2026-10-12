@@ -1,4 +1,3 @@
-// @ts-nocheck — partial Supabase mocks cause type mismatches
 /**
  * Tests for Zod validation schemas
  */
@@ -453,7 +452,7 @@ describe("sanitizeError", () => {
       {
         code: "too_small",
         minimum: 1,
-        type: "string",
+        origin: "string",
         inclusive: true,
         exact: false,
         message: "Required",

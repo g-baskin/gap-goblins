@@ -1,0 +1,10 @@
+# Block direct pushes to main. GitHub branch protection is unavailable on this
+# private repo's plan, so this local guard stands in for it.
+# Intentional release pushes: ALLOW_MAIN_PUSH=1 git push origin main
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  if [ "$remote_ref" = "refs/heads/main" ] && [ "${ALLOW_MAIN_PUSH:-}" != "1" ]; then
+    echo "❌ Direct push to main is blocked. Merge via dev/PR, or set ALLOW_MAIN_PUSH=1 for an intentional release push."
+    exit 1
+  fi
+done
+exit 0

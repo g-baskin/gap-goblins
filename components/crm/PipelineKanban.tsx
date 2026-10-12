@@ -174,11 +174,6 @@ export function PipelineKanban({ onDealClick }: PipelineKanbanProps) {
     }
   };
 
-  const handleAddDeal = (stageSlug: string) => {
-    // TODO: Implement add deal modal
-    console.log("Add deal to stage:", stageSlug);
-  };
-
   if (loading) {
     return (
       <Card>
@@ -246,7 +241,6 @@ export function PipelineKanban({ onDealClick }: PipelineKanbanProps) {
                 stage={stage}
                 deals={dealsByStage[stage.slug] || []}
                 onDealClick={onDealClick}
-                onAddDeal={() => handleAddDeal(stage.slug)}
               />
             ))}
           </div>

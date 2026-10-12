@@ -58,7 +58,6 @@ scripts/test-credential-masking.ts
 
 # N8N workflow exports
 *.n8n.json
-*workflow*.json
 
 # html exports
 html-exports/

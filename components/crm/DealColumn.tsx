@@ -80,18 +80,20 @@ export function DealColumn({ stage, deals, onDealClick, onAddDeal }: DealColumnP
         )}
       </div>
 
-      {/* Add Deal Button */}
-      <div className="p-2 border-t border-border">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start text-muted-foreground hover:text-foreground"
-          onClick={onAddDeal}
-        >
-          <IconPlus className="h-4 w-4 mr-2" />
-          Add Deal
-        </Button>
-      </div>
+      {/* Add Deal Button (only when a handler is wired) */}
+      {onAddDeal && (
+        <div className="p-2 border-t border-border">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start text-muted-foreground hover:text-foreground"
+            onClick={onAddDeal}
+          >
+            <IconPlus className="h-4 w-4 mr-2" />
+            Add Deal
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

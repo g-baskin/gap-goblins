@@ -1,4 +1,3 @@
-// @ts-nocheck — test mocks need updating to use Drizzle
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------

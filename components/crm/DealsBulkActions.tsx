@@ -1,6 +1,6 @@
 "use client";
 
-import { IconArrowRight, IconDownload, IconTrash } from "@tabler/icons-react";
+import { IconArrowRight, IconTrash } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -53,11 +53,6 @@ export function DealsBulkActions({ selectedDealIds, onActionComplete }: DealsBul
     };
     fetchStages();
   }, []);
-
-  const handleExportCSV = () => {
-    // TODO: Implement CSV export
-    toast.success(`Exporting ${selectedDealIds.length} deals...`);
-  };
 
   const handleBulkMove = async () => {
     if (!selectedStage) return;
@@ -119,10 +114,6 @@ export function DealsBulkActions({ selectedDealIds, onActionComplete }: DealsBul
           <Button variant="outline" size="sm" onClick={() => setShowMoveDialog(true)}>
             <IconArrowRight className="h-4 w-4 mr-2" />
             Move to Stage
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleExportCSV}>
-            <IconDownload className="h-4 w-4 mr-2" />
-            Export CSV
           </Button>
           <Button variant="destructive" size="sm" onClick={() => setShowDeleteDialog(true)}>
             <IconTrash className="h-4 w-4 mr-2" />

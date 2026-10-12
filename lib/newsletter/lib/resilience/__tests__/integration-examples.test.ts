@@ -1,4 +1,3 @@
-// @ts-nocheck — partial Supabase mocks cause type mismatches
 /**
  * Rate Limiter Integration Examples
  *
