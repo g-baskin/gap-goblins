@@ -14,7 +14,7 @@ import {
   stages,
   tenantBranding,
 } from "@/lib/db/schema";
-import type { LeadFinderExecutor } from "./db";
+import { isTenantStorageKey, type LeadFinderExecutor } from "./db";
 import { type GapFlags, parseStoredFlags } from "./scoring";
 import { DEFAULT_MAX_RESULTS, maxResultsCap } from "./scoring-config";
 import type { LeadSourceId } from "./types";
@@ -330,4 +330,16 @@ export async function upsertBranding(
     })
     .returning();
   return row;
+}
+
+/** Sets or clears the logo key. Keys must live under the tenant's storage prefix. */
+export async function setBrandingLogo(
+  db: LeadFinderExecutor,
+  tenantId: string,
+  logoStorageKey: string | null,
+): Promise<TenantBrandingRow> {
+  if (logoStorageKey !== null && !isTenantStorageKey(tenantId, logoStorageKey)) {
+    throw new Error("Logo key is outside the tenant's storage prefix");
+  }
+  return upsertBranding(db, tenantId, { logoStorageKey });
 }
