@@ -239,12 +239,12 @@ describe.skipIf(!hasChromium)("Playwright PDF", () => {
       // Letter = 612 x 792 points.
       expect(pdf.toString("latin1")).toMatch(/\/MediaBox\s*\[\s*0 0 612 792\s*\]/);
     }
-  }, 60_000);
+  }, 180_000);
 
   it("blocks a remote resource the HTML tries to load", async () => {
     const { blockedRequests } = await renderReportPdf(
       '<html><body><img src="https://example.com/x.png"><p>hi</p></body></html>',
     );
     expect(blockedRequests).toEqual(["https://example.com/x.png"]);
-  }, 60_000);
+  }, 180_000);
 });

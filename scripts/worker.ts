@@ -381,12 +381,8 @@ async function main() {
 
   // pg-boss v10+ requires queues to exist before work() / send().
   // createQueue is idempotent — safe to call on every boot.
-  const allQueues = [
-    ...Object.values(QUEUE),
-    OUTREACH_PROCESS_QUEUE,
-    LEAD_SCAN_QUEUE,
-    LEAD_REPORT_QUEUE,
-  ];
+  // QUEUE (lib/queue/index.ts) already includes lead-scan.run and lead-report.generate.
+  const allQueues = [...Object.values(QUEUE), OUTREACH_PROCESS_QUEUE];
   for (const name of allQueues) {
     await boss.createQueue(name);
   }
