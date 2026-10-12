@@ -294,4 +294,130 @@ suite("Lead Finder route isolation", () => {
     expect(res.status).toBe(409);
     expect((await res.json()).error).toMatch(/Source unavailable|UNVERIFIED/);
   });
+
+  describe("territories", () => {
+    const territories = () => import("@/app/api/lead-finder/territories/route");
+    const territoryById = () => import("@/app/api/lead-finder/territories/[territoryId]/route");
+    const zipOutline = () => import("@/app/api/lead-finder/territories/zip-outline/route");
+    const drawn = {
+      outer: [
+        { lat: 38.28, lng: -77.49 },
+        { lat: 38.28, lng: -77.44 },
+        { lat: 38.33, lng: -77.44 },
+        { lat: 38.33, lng: -77.49 },
+      ],
+      holes: [],
+    };
+    const json = (method: string, tenant: string, body: unknown) =>
+      req("/x", {
+        method,
+        tenant,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    let territoryA: string;
+
+    beforeAll(async () => {
+      state.userId = userA;
+      // Drawn areas only: no Census call is needed to save.
+      const res = await (await territories()).POST(
+        json("POST", tenantA, { name: "A downtown", polygons: [drawn] }),
+      );
+      expect(res.status).toBe(201);
+      territoryA = (await res.json()).territory.id;
+    });
+
+    it("tenant A can list, read and scan with its own territory", async () => {
+      state.userId = userA;
+      const list = await (await territories()).GET(req("/x", { tenant: tenantA }));
+      expect((await list.json()).territories.map((t: { name: string }) => t.name)).toEqual([
+        "A downtown",
+      ]);
+      const one = await (await territoryById()).GET(
+        req("/x", { tenant: tenantA }),
+        p({ territoryId: territoryA }),
+      );
+      expect(one.status).toBe(200);
+      const scan = await (await scans()).POST(
+        json("POST", tenantA, {
+          niche: "plumbers",
+          location: "Fredericksburg VA",
+          source: "fixture",
+          territoryId: territoryA,
+        }),
+      );
+      expect(scan.status).toBe(201);
+      expect((await scan.json()).scan).toMatchObject({
+        territoryId: territoryA,
+        territoryName: "A downtown",
+      });
+    });
+
+    it("tenant B cannot read, change, delete or scan with tenant A's territory", async () => {
+      state.userId = userB;
+      const byHeader = await Promise.all([
+        (await territories()).GET(req("/x", { tenant: tenantA })),
+        (await territoryById()).GET(req("/x", { tenant: tenantA }), p({ territoryId: territoryA })),
+        (await zipOutline()).GET(req("/x?zip=22401", { tenant: tenantA })),
+      ]);
+      expect(byHeader.map((r) => r.status)).toEqual([403, 403, 403]);
+
+      const byId = await Promise.all([
+        (await territoryById()).GET(req("/x", { tenant: tenantB }), p({ territoryId: territoryA })),
+        (await territoryById()).PUT(
+          json("PUT", tenantB, { name: "Taken over", polygons: [drawn] }),
+          p({ territoryId: territoryA }),
+        ),
+        (await territoryById()).DELETE(
+          req("/x", { method: "DELETE", tenant: tenantB }),
+          p({ territoryId: territoryA }),
+        ),
+      ]);
+      expect(byId.map((r) => r.status)).toEqual([404, 404, 404]);
+
+      const scan = await (await scans()).POST(
+        json("POST", tenantB, {
+          niche: "plumbers",
+          location: "Fredericksburg VA",
+          source: "fixture",
+          territoryId: territoryA,
+        }),
+      );
+      expect(scan.status).toBe(400);
+      expect((await scan.json()).error).toBe("Territory not found");
+
+      const list = await (await territories()).GET(req("/x", { tenant: tenantB }));
+      expect((await list.json()).territories).toEqual([]);
+
+      state.userId = userA;
+      const still = await (await territoryById()).GET(
+        req("/x", { tenant: tenantA }),
+        p({ territoryId: territoryA }),
+      );
+      expect((await still.json()).territory.name).toBe("A downtown");
+    });
+
+    it("rejects bad territory input before calling the Census", async () => {
+      state.userId = userA;
+      const bad = await Promise.all([
+        (await territories()).POST(json("POST", tenantA, { name: "", polygons: [drawn] })),
+        (await territories()).POST(json("POST", tenantA, { name: "No area" })),
+        (await territories()).POST(
+          json("POST", tenantA, { name: "Bad zip", zipCodes: ["2240'1"] }),
+        ),
+        (await zipOutline()).GET(req("/x?zip=abc", { tenant: tenantA })),
+        (await territoryById()).GET(
+          req("/x", { tenant: tenantA }),
+          p({ territoryId: "not-a-uuid" }),
+        ),
+      ]);
+      expect(bad.map((r) => r.status)).toEqual([400, 400, 400, 400, 404]);
+    });
+
+    it("rejects unauthenticated territory requests", async () => {
+      state.userId = "";
+      const res = await (await territories()).GET(req("/x", { tenant: tenantA }));
+      expect(res.status).toBe(401);
+    });
+  });
 });

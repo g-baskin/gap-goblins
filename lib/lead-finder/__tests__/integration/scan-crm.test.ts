@@ -58,6 +58,8 @@ function business(overrides: Partial<NormalizedBusiness>): NormalizedBusiness {
     isPermanentlyClosed: false,
     isTemporarilyClosed: false,
     email: null,
+    point: null,
+    postalCode: null,
     rawPayload: null,
     ...overrides,
   };

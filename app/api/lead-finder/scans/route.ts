@@ -5,6 +5,7 @@ import { tenantStoragePrefix } from "@/lib/lead-finder/db";
 import { createScan, listScans, markScanFailed } from "@/lib/lead-finder/queries";
 import { importBusinesses } from "@/lib/lead-finder/sources/csv-import";
 import { getLeadSource } from "@/lib/lead-finder/sources/index";
+import { getTerritory } from "@/lib/lead-finder/territories/store";
 import { LeadSourceInputError, leadSourceIds } from "@/lib/lead-finder/types";
 import { logger } from "@/lib/logger";
 import { enqueueLeadScan } from "@/lib/queue";
@@ -15,6 +16,7 @@ const scanSchema = z.object({
   location: z.string().trim().min(1, "Location is required").max(200),
   maxResults: z.coerce.number().int().min(1).max(1000).optional(),
   source: z.enum(leadSourceIds),
+  territoryId: z.preprocess((value) => (value === "" ? undefined : value), z.uuid().optional()),
 });
 
 export async function GET(request: Request) {
@@ -36,7 +38,7 @@ export async function POST(request: Request) {
     if (isMultipart) {
       const form = await request.formData();
       fields = Object.fromEntries(
-        ["niche", "location", "maxResults", "source"].map((key) => [
+        ["niche", "location", "maxResults", "source", "territoryId"].map((key) => [
           key,
           form.get(key) ?? undefined,
         ]),
@@ -57,9 +59,14 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const input = parsed.data;
+  const { territoryId, ...input } = parsed.data;
   const source = getLeadSource(input.source);
   if (!source) return Response.json({ error: "Unknown source" }, { status: 400 });
+  // Tenant-scoped lookup: another tenant's territory id reads as not found.
+  const territory = territoryId ? await getTerritory(db, tenantId, territoryId) : null;
+  if (territoryId && !territory) {
+    return Response.json({ error: "Territory not found" }, { status: 400 });
+  }
 
   let sourceFileKey: string | null = null;
   let sourceFileName: string | null = null;
@@ -98,6 +105,7 @@ export async function POST(request: Request) {
     sourceFileKey,
     sourceFileName,
     createdBy: authResult.userId,
+    territory: territory ? { id: territory.id, name: territory.name } : null,
   });
   try {
     await enqueueLeadScan({ scanId: scan.id, tenantId });

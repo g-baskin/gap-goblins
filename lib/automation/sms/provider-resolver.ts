@@ -1,16 +1,10 @@
-import { z } from "zod";
+import { resolveTwilioCredentials } from "@/lib/messaging/credentials";
 import { DisabledSmsProvider, TwilioSmsProvider } from "./provider";
 import type { SmsProviderResolver } from "./service";
 
-const credentialsSchema = z
-  .object({ accountSid: z.string().min(1), authToken: z.string().min(1) })
-  .strict();
-
+/** Builds the Twilio provider for a channel account; disabled when its credentials are unusable. */
 export const resolveConfiguredSmsProvider: SmsProviderResolver = async ({ secretReference }) => {
-  const match = /^env:([A-Z][A-Z0-9_]*)$/.exec(secretReference);
-  if (!match) return new DisabledSmsProvider();
-  const value = process.env[match[1] as string];
-  if (!value) return new DisabledSmsProvider();
-  const credentials = credentialsSchema.parse(JSON.parse(value));
+  const credentials = resolveTwilioCredentials(secretReference);
+  if (!credentials) return new DisabledSmsProvider();
   return new TwilioSmsProvider(credentials.accountSid, credentials.authToken);
 };

@@ -3,6 +3,7 @@ import {
   type AnyPgColumn,
   boolean,
   check,
+  doublePrecision,
   foreignKey,
   index,
   integer,
@@ -1395,6 +1396,12 @@ export const conversationThreads = pgTable(
     state: text("state").notNull().default("open"),
     subject: text("subject"),
     lastEventAt: timestamp("last_event_at", { withTimezone: true, mode: "string" }),
+    /** Inbound messages since the team last opened the thread (inbox "Unread"). */
+    unreadCount: integer("unread_count").notNull().default(0),
+    /** Team-wide star, like the inbox "Starred" filter in GoHighLevel. */
+    starred: boolean("starred").notNull().default(false),
+    /** First part of the latest message, for the inbox list. */
+    lastMessagePreview: text("last_message_preview"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
       .notNull()
       .defaultNow(),
@@ -1408,6 +1415,12 @@ export const conversationThreads = pgTable(
       table.id,
       table.contactId,
     ),
+    // One open thread per contact per channel, so two inbound texts racing never split a chat.
+    uniqueIndex("conversation_threads_open_contact_channel_unique_idx")
+      .on(table.tenantId, table.contactId, table.channel)
+      .where(sql`${table.state} = 'open'`),
+    index("conversation_threads_tenant_last_event_idx").on(table.tenantId, table.lastEventAt),
+    check("conversation_threads_unread_count_check", sql`${table.unreadCount} >= 0`),
     foreignKey({
       columns: [table.tenantId, table.locationId],
       foreignColumns: [locations.tenantId, locations.id],
@@ -2026,6 +2039,38 @@ export const automationTenantAssignmentAudits = pgTable(
 export const leadScanStatuses = ["queued", "running", "completed", "failed", "cancelled"] as const;
 export type LeadScanStatus = (typeof leadScanStatuses)[number];
 
+/**
+ * A named area a tenant sells into: drawn map areas and/or ZIP codes (with the Census ZIP
+ * outline captured when each ZIP was added). Shapes are validated in
+ * lib/lead-finder/territories/geometry.ts before they are stored.
+ */
+export const leadTerritories = pgTable(
+  "lead_territories",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    name: text("name").notNull(),
+    /** GeoPolygon[] drawn on the map. */
+    polygons: jsonb("polygons").notNull().default([]),
+    /** TerritoryZip[]: ZIP code, outline source and Census outline. */
+    zips: jsonb("zips").notNull().default([]),
+    createdBy: uuid("created_by").references(() => adminUsers.id),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("lead_territories_tenant_id_unique_idx").on(table.tenantId, table.id),
+    uniqueIndex("lead_territories_tenant_name_unique_idx").on(table.tenantId, table.name),
+    check("lead_territories_name_check", sql`length(${table.name}) between 1 and 120`),
+  ],
+);
+
 export const leadScans = pgTable(
   "lead_scans",
   {
@@ -2046,6 +2091,11 @@ export const leadScans = pgTable(
     updatedCount: integer("updated_count").notNull().default(0),
     skippedClosedCount: integer("skipped_closed_count").notNull().default(0),
     errorCount: integer("error_count").notNull().default(0),
+    /** Optional territory the scan targets; businesses known to be outside it are skipped. */
+    territoryId: uuid("territory_id"),
+    /** The territory's name when the scan was created, kept if the territory is deleted. */
+    territoryName: text("territory_name"),
+    skippedOutsideTerritoryCount: integer("skipped_outside_territory_count").notNull().default(0),
     errorMessage: text("error_message"),
     createdBy: uuid("created_by").references(() => adminUsers.id),
     startedAt: timestamp("started_at", { withTimezone: true, mode: "string" }),
@@ -2061,6 +2111,14 @@ export const leadScans = pgTable(
     uniqueIndex("lead_scans_tenant_id_unique_idx").on(table.tenantId, table.id),
     index("lead_scans_tenant_created_idx").on(table.tenantId, table.createdAt),
     index("lead_scans_tenant_status_idx").on(table.tenantId, table.status),
+    index("lead_scans_tenant_territory_idx").on(table.tenantId, table.territoryId),
+    // Same-tenant territory only. The migration sets ON DELETE SET NULL (territory_id) so
+    // deleting a territory keeps the scan (and its tenant_id); Drizzle cannot express that list.
+    foreignKey({
+      columns: [table.tenantId, table.territoryId],
+      foreignColumns: [leadTerritories.tenantId, leadTerritories.id],
+      name: "lead_scans_tenant_territory_fk",
+    }),
     check(
       "lead_scans_status_check",
       sql`${table.status} in ('queued', 'running', 'completed', 'failed', 'cancelled')`,
@@ -2097,6 +2155,15 @@ export const leadBusinesses = pgTable(
     isTemporarilyClosed: boolean("is_temporarily_closed"),
     email: text("email"),
     rawPayload: jsonb("raw_payload"),
+    /** Map point from the source or the Census geocoder; null when unknown. */
+    latitude: doublePrecision("latitude"),
+    longitude: doublePrecision("longitude"),
+    /** 5-digit ZIP from the source or the address; null when unknown. */
+    postalCode: text("postal_code"),
+    /** Where the map point came from: "source" or "census-geocoder". */
+    locationSource: text("location_source").$type<"source" | "census-geocoder">(),
+    /** Last Census geocode attempt, so a failed lookup is not repeated on every scan. */
+    geocodeAttemptedAt: timestamp("geocode_attempted_at", { withTimezone: true, mode: "string" }),
     contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
     dealId: uuid("deal_id").references(() => deals.id, { onDelete: "set null" }),
     firstSeenScanId: uuid("first_seen_scan_id").references(() => leadScans.id),
@@ -2118,6 +2185,19 @@ export const leadBusinesses = pgTable(
     index("lead_businesses_tenant_phone_idx").on(table.tenantId, table.phoneE164),
     index("lead_businesses_tenant_gbp_url_idx").on(table.tenantId, table.gbpUrl),
     index("lead_businesses_tenant_contact_idx").on(table.tenantId, table.contactId),
+    index("lead_businesses_tenant_postal_code_idx").on(table.tenantId, table.postalCode),
+    check(
+      "lead_businesses_location_check",
+      sql`(${table.latitude} is null) = (${table.longitude} is null) and (${table.latitude} is null or (${table.latitude} between -90 and 90 and ${table.longitude} between -180 and 180))`,
+    ),
+    check(
+      "lead_businesses_postal_code_check",
+      sql`${table.postalCode} is null or ${table.postalCode} ~ '^[0-9]{5}$'`,
+    ),
+    check(
+      "lead_businesses_location_source_check",
+      sql`${table.locationSource} is null or ${table.locationSource} in ('source', 'census-geocoder')`,
+    ),
   ],
 );
 
@@ -2137,12 +2217,18 @@ export const leadScanResults = pgTable(
     score: integer("score").notNull(),
     flags: jsonb("flags").notNull(),
     rubricVersion: text("rubric_version").notNull(),
+    /** Null when the scan had no territory; "inside" or "unknown" (outside ones are skipped). */
+    territoryStatus: text("territory_status").$type<"inside" | "outside" | "unknown">(),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
       .notNull()
       .defaultNow(),
   },
   (table) => [
     uniqueIndex("lead_scan_results_tenant_id_unique_idx").on(table.tenantId, table.id),
+    check(
+      "lead_scan_results_territory_status_check",
+      sql`${table.territoryStatus} is null or ${table.territoryStatus} in ('inside', 'outside', 'unknown')`,
+    ),
     uniqueIndex("lead_scan_results_scan_business_unique_idx").on(table.scanId, table.businessId),
     index("lead_scan_results_tenant_scan_score_idx").on(table.tenantId, table.scanId, table.score),
     index("lead_scan_results_tenant_business_idx").on(

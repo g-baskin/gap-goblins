@@ -20,6 +20,7 @@ import {
 } from "@/lib/db/schema";
 import type { LeadFinderExecutor } from "./db";
 import { type ScoreResult, scoreBusiness } from "./scoring";
+import type { TerritoryStatus } from "./territories/types";
 import type { NormalizedBusiness } from "./types";
 
 export const PROSPECT_PIPELINE_SLUG = "gap-goblins-prospects";
@@ -278,6 +279,44 @@ async function createDeal(
   return deal.id;
 }
 
+export interface StoredLocation {
+  point: { lat: number; lng: number } | null;
+  pointSource: "source" | "census-geocoder" | null;
+  postalCode: string | null;
+  geocodeAttemptedAt: string | null;
+}
+
+/** The location already stored for this business (matched by the dedupe keys), if any. */
+export async function findStoredLocation(
+  db: LeadFinderExecutor,
+  tenantId: string,
+  business: Pick<NormalizedBusiness, DedupeKey>,
+): Promise<StoredLocation | null> {
+  const existing = await findExistingBusiness(db, tenantId, business);
+  if (!existing) return null;
+  const [row] = await db
+    .select({
+      latitude: leadBusinesses.latitude,
+      longitude: leadBusinesses.longitude,
+      locationSource: leadBusinesses.locationSource,
+      postalCode: leadBusinesses.postalCode,
+      geocodeAttemptedAt: leadBusinesses.geocodeAttemptedAt,
+    })
+    .from(leadBusinesses)
+    .where(and(eq(leadBusinesses.tenantId, tenantId), eq(leadBusinesses.id, existing.id)))
+    .limit(1);
+  if (!row) return null;
+  return {
+    point:
+      row.latitude !== null && row.longitude !== null
+        ? { lat: row.latitude, lng: row.longitude }
+        : null,
+    pointSource: row.locationSource,
+    postalCode: row.postalCode,
+    geocodeAttemptedAt: row.geocodeAttemptedAt,
+  };
+}
+
 async function contactExists(tx: LeadFinderExecutor, tenantId: string, id: string | null) {
   if (!id) return false;
   const [row] = await tx
@@ -310,9 +349,15 @@ export async function upsertScannedBusiness(
     scanId: string;
     business: NormalizedBusiness;
     pipeline: ProspectPipeline;
+    /** Set when the scan targets a territory. */
+    territoryStatus?: TerritoryStatus | null;
+    /** True when this scan asked the Census geocoder for the business's address. */
+    geocodeAttempted?: boolean;
   },
 ): Promise<UpsertOutcome> {
   const { tenantId, scanId, business, pipeline } = input;
+  const territoryStatus = input.territoryStatus ?? null;
+  const geocodeAttempted = input.geocodeAttempted === true;
   const score = scoreBusiness(business);
   const lockKey = dedupeCandidates(business)[0]?.value ?? business.name.toLowerCase();
 
@@ -335,6 +380,10 @@ export async function upsertScannedBusiness(
           placeId: leadBusinesses.placeId,
           cid: leadBusinesses.cid,
           email: leadBusinesses.email,
+          latitude: leadBusinesses.latitude,
+          longitude: leadBusinesses.longitude,
+          postalCode: leadBusinesses.postalCode,
+          locationSource: leadBusinesses.locationSource,
           contactId: leadBusinesses.contactId,
           dealId: leadBusinesses.dealId,
         })
@@ -363,6 +412,20 @@ export async function upsertScannedBusiness(
           placeId: row.placeId ?? business.placeId,
           cid: row.cid ?? business.cid,
           email: business.email ?? row.email,
+          // A scan without location data never erases a location found earlier.
+          ...(business.point
+            ? {
+                latitude: business.point.lat,
+                longitude: business.point.lng,
+                locationSource: business.pointSource ?? "source",
+              }
+            : {
+                latitude: row.latitude,
+                longitude: row.longitude,
+                locationSource: row.locationSource,
+              }),
+          postalCode: business.postalCode ?? row.postalCode,
+          ...(geocodeAttempted ? { geocodeAttemptedAt: now } : {}),
           lastSeenScanId: scanId,
           updatedAt: now,
         })
@@ -375,6 +438,11 @@ export async function upsertScannedBusiness(
           ...businessColumns(business),
           kgmid: business.kgmid,
           email: business.email,
+          latitude: business.point?.lat ?? null,
+          longitude: business.point?.lng ?? null,
+          locationSource: business.point ? (business.pointSource ?? "source") : null,
+          postalCode: business.postalCode,
+          geocodeAttemptedAt: geocodeAttempted ? now : null,
           firstSeenScanId: scanId,
           lastSeenScanId: scanId,
           createdAt: now,
@@ -401,11 +469,17 @@ export async function upsertScannedBusiness(
         score: score.score,
         flags: score.flags,
         rubricVersion: score.rubricVersion,
+        territoryStatus,
         createdAt: now,
       })
       .onConflictDoUpdate({
         target: [leadScanResults.scanId, leadScanResults.businessId],
-        set: { score: score.score, flags: score.flags, rubricVersion: score.rubricVersion },
+        set: {
+          score: score.score,
+          flags: score.flags,
+          rubricVersion: score.rubricVersion,
+          territoryStatus,
+        },
       })
       .returning({ id: leadScanResults.id });
 

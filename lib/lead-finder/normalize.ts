@@ -11,7 +11,15 @@
  * field's "none" value where that is unambiguous (no website, no description,
  * no hours, zero owner posts); otherwise null.
  */
+
 import { toUsE164 } from "./phone";
+import {
+  parseCoordinates,
+  parsePostalCode,
+  pointFrom,
+  postalCodeFromAddress,
+  postalCodeFromDetailedAddress,
+} from "./territories/location";
 import type { NormalizedBusiness, Tri } from "./types";
 
 export type FieldKey =
@@ -33,7 +41,12 @@ export type FieldKey =
   | "ownerPosts"
   | "isPermanentlyClosed"
   | "isTemporarilyClosed"
-  | "email";
+  | "email"
+  | "coordinates"
+  | "latitude"
+  | "longitude"
+  | "postalCode"
+  | "detailedAddress";
 
 /** Column aliases per field, normalised (lowercase, alphanumerics only). */
 export const COLUMN_ALIASES: Record<FieldKey, string[]> = {
@@ -56,6 +69,11 @@ export const COLUMN_ALIASES: Record<FieldKey, string[]> = {
   isPermanentlyClosed: ["ispermanentlyclosed", "permanentlyclosed"],
   isTemporarilyClosed: ["istemporarilyclosed", "temporarilyclosed"],
   email: ["email", "emails", "emailaddress"],
+  coordinates: ["coordinates", "coords", "latlng", "location"],
+  latitude: ["latitude", "lat"],
+  longitude: ["longitude", "lng", "lon", "long"],
+  postalCode: ["postalcode", "zip", "zipcode", "postcode"],
+  detailedAddress: ["detailedaddress"],
 };
 
 export function normalizeHeader(header: string): string {
@@ -210,6 +228,13 @@ export function normalizeRecord(
 
   const phoneRaw = text(get("phone"));
   const website = has("website") ? (text(get("website")) ?? "") : null;
+  const address = text(get("address"));
+  const point =
+    parseCoordinates(get("coordinates")) ?? pointFrom(get("latitude"), get("longitude"));
+  const postalCode =
+    parsePostalCode(get("postalCode")) ??
+    postalCodeFromDetailedAddress(get("detailedAddress")) ??
+    postalCodeFromAddress(address);
 
   return {
     kgmid: text(get("kgmid")),
@@ -217,7 +242,7 @@ export function normalizeRecord(
     cid: text(get("cid")),
     name: name.slice(0, 500),
     mainCategory: text(get("mainCategory")),
-    address: text(get("address")),
+    address,
     phoneRaw,
     phoneE164: toUsE164(phoneRaw),
     website,
@@ -236,6 +261,8 @@ export function normalizeRecord(
     isPermanentlyClosed: has("isPermanentlyClosed") ? parseBool(get("isPermanentlyClosed")) : null,
     isTemporarilyClosed: has("isTemporarilyClosed") ? parseBool(get("isTemporarilyClosed")) : null,
     email: has("email") ? firstEmail(get("email")) : null,
+    point,
+    postalCode,
     rawPayload: capRawPayload(record),
   };
 }

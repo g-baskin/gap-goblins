@@ -17,6 +17,7 @@ import {
 import { isTenantStorageKey, type LeadFinderExecutor } from "./db";
 import { type GapFlags, parseStoredFlags } from "./scoring";
 import { DEFAULT_MAX_RESULTS, maxResultsCap } from "./scoring-config";
+import type { TerritoryStatus } from "./territories/types";
 import type { LeadSourceId } from "./types";
 
 export type LeadScanRow = typeof leadScans.$inferSelect;
@@ -31,6 +32,8 @@ export interface CreateScanInput {
   sourceFileKey?: string | null;
   sourceFileName?: string | null;
   createdBy?: string | null;
+  /** Must already be checked to belong to the tenant (see getTerritory). */
+  territory?: { id: string; name: string } | null;
 }
 
 export function clampMaxResults(value: number | undefined): number {
@@ -55,6 +58,8 @@ export async function createScan(
       sourceFileKey: input.sourceFileKey ?? null,
       sourceFileName: input.sourceFileName?.slice(0, 255) ?? null,
       createdBy: input.createdBy ?? null,
+      territoryId: input.territory?.id ?? null,
+      territoryName: input.territory?.name ?? null,
       status: "queued",
     })
     .returning();
@@ -128,6 +133,7 @@ export interface ScanResultListItem {
   reviewCount: number | null;
   score: number;
   flags: GapFlags;
+  territoryStatus: TerritoryStatus | null;
   contactId: string | null;
   dealId: string | null;
 }
@@ -152,6 +158,7 @@ export async function listScanResults(
       reviewCount: leadBusinesses.reviewCount,
       score: leadScanResults.score,
       flags: leadScanResults.flags,
+      territoryStatus: leadScanResults.territoryStatus,
       contactId: leadBusinesses.contactId,
       dealId: leadBusinesses.dealId,
     })

@@ -121,6 +121,9 @@ export function fixtureBusinesses(
       isPermanentlyClosed: permanentlyClosed,
       isTemporarilyClosed: false,
       email: null,
+      // Sample businesses have no real location, so territory checks show "Not checked".
+      point: null,
+      postalCode: null,
       rawPayload: { fixture: true, index: i },
     });
   }
@@ -130,6 +133,7 @@ export function fixtureBusinesses(
 export const fixtureSource: LeadSource = {
   id: "fixture",
   label: "Sample data (fixture)",
+  sampleData: true,
   async health() {
     return { available: true, contract: "verified", message: "Deterministic sample data" };
   },

@@ -1,6 +1,6 @@
 "use client";
 
-import { IconFileUpload, IconPalette, IconSearch } from "@tabler/icons-react";
+import { IconFileUpload, IconMapPin, IconPalette, IconSearch } from "@tabler/icons-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
@@ -57,6 +57,10 @@ const SOURCE_HINTS: Record<string, string> = {
     "Live search through the omkar desktop app. Disabled until its API contract is verified.",
 };
 
+type TerritoryOption = { id: string; name: string };
+/** Select items cannot have an empty value, so "no territory" uses a sentinel. */
+const NO_TERRITORY = "none";
+
 export function LeadFinderHome({ tenants }: { tenants: AvailableTenant[] }) {
   const { tenantId, setTenantId } = useLeadFinderTenant(tenants);
   return (
@@ -68,11 +72,18 @@ export function LeadFinderHome({ tenants }: { tenants: AvailableTenant[] }) {
             Find local businesses with the weakest online presence, then send them a gap report.
           </p>
         </div>
-        <Button asChild variant="outline">
-          <Link href="/admin/lead-finder/branding">
-            <IconPalette className="size-4" /> Report branding
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline">
+            <Link href="/admin/lead-finder/territories">
+              <IconMapPin className="size-4" /> Territories
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/admin/lead-finder/branding">
+              <IconPalette className="size-4" /> Report branding
+            </Link>
+          </Button>
+        </div>
       </div>
       <TenantPicker tenants={tenants} tenantId={tenantId} onChange={setTenantId} />
       {tenantId ? (
@@ -95,13 +106,19 @@ function ScanForm({ tenantId }: { tenantId: string }) {
   const [location, setLocation] = useState("Fredericksburg VA");
   const [maxResults, setMaxResults] = useState(50);
   const [file, setFile] = useState<File | null>(null);
+  const [territoryId, setTerritoryId] = useState(NO_TERRITORY);
+  const [territories, setTerritories] = useState<TerritoryOption[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     tenantFetch<{ sources: SourceInfo[] }>(tenantId, "/api/lead-finder/sources")
       .then((data) => setSources(data.sources))
       .catch(() => setSources([]));
+    tenantFetch<{ territories: TerritoryOption[] }>(tenantId, "/api/lead-finder/territories")
+      .then((data) => setTerritories(data.territories))
+      .catch(() => setTerritories([]));
   }, [tenantId]);
+  const scanTerritory = territoryId === NO_TERRITORY ? "" : territoryId;
 
   const selected = sources.find((s) => s.id === source);
 
@@ -117,13 +134,20 @@ function ScanForm({ tenantId }: { tenantId: string }) {
         form.set("location", location);
         form.set("maxResults", String(maxResults));
         form.set("source", source);
+        form.set("territoryId", scanTerritory);
         form.set("file", file);
         init = { method: "POST", body: form };
       } else {
         init = {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ niche, location, maxResults, source }),
+          body: JSON.stringify({
+            niche,
+            location,
+            maxResults,
+            source,
+            ...(scanTerritory ? { territoryId: scanTerritory } : {}),
+          }),
         };
       }
       const { scan } = await tenantFetch<{ scan: LeadScanRow }>(
@@ -199,6 +223,32 @@ function ScanForm({ tenantId }: { tenantId: string }) {
                 For imports, niche and location are labels for your scan history.
               </p>
             ) : null}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="scan-territory">Territory</Label>
+            <Select value={territoryId} onValueChange={setTerritoryId}>
+              <SelectTrigger id="scan-territory" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_TERRITORY}>Any (no territory filter)</SelectItem>
+                {territories.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {scanTerritory
+                ? "Businesses outside the territory are skipped. Ones with no known location are kept and marked Not checked."
+                : territories.length === 0
+                  ? "Optional. Set up territories to keep only businesses in your areas."
+                  : "Optional. Keep only businesses inside one of your territories."}{" "}
+              <Link href="/admin/lead-finder/territories" className="text-primary hover:underline">
+                Manage territories
+              </Link>
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="scan-max">Max results</Label>

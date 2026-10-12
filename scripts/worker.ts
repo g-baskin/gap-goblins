@@ -43,6 +43,7 @@ import {
   type LeadScanJobPayload,
   runLeadScan,
 } from "../lib/lead-finder/scan-runner";
+import { geocodeAddress } from "../lib/lead-finder/territories/census";
 import { processCleanupJob } from "../lib/newsletter/lib/queue/jobs/cleanup-job";
 // Job processors
 import { processCurateJob } from "../lib/newsletter/lib/queue/jobs/curate-job";
@@ -358,6 +359,7 @@ async function handleLeadScan(jobs: Job<LeadScanJobPayload>[]) {
   for (const job of jobs) {
     await runLeadScan(workerDb, job.data, {
       loadSourceFile: async (key) => (await workerDownloadFile(key)).toString("utf8"),
+      geocode: (address) => geocodeAddress(address),
     });
   }
 }

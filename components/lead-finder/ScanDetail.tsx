@@ -17,6 +17,8 @@ import {
 import { toCsv } from "@/lib/lead-finder/csv";
 import type { LeadScanRow, ScanResultListItem } from "@/lib/lead-finder/queries";
 import { GAP_LABELS, gapFlagKeys } from "@/lib/lead-finder/scoring-config";
+import { TERRITORY_STATUS_LABELS, type TerritoryStatus } from "@/lib/lead-finder/territories/types";
+import { cn } from "@/lib/utils";
 import {
   type AvailableTenant,
   formatDate,
@@ -30,6 +32,28 @@ import {
 } from "./shared";
 
 type ScanResponse = { scan: LeadScanRow; results: ScanResultListItem[] };
+
+function TerritoryBadge({ status }: { status: TerritoryStatus | null }) {
+  if (!status) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <span
+      className={cn(
+        "rounded px-2 py-0.5 text-xs font-medium",
+        status === "inside" &&
+          "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+        status === "outside" && "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+        status === "unknown" && "bg-muted text-muted-foreground",
+      )}
+      title={
+        status === "unknown"
+          ? "No map location or ZIP code was found for this business, so it was kept."
+          : undefined
+      }
+    >
+      {TERRITORY_STATUS_LABELS[status]}
+    </span>
+  );
+}
 
 export function ScanDetail({ tenants, scanId }: { tenants: AvailableTenant[]; scanId: string }) {
   const { tenantId, setTenantId } = useLeadFinderTenant(tenants);
@@ -78,7 +102,18 @@ function ScanView({ tenantId, scanId }: { tenantId: string; scanId: string }) {
   const csvHref = useMemo(() => {
     if (!data?.results.length) return null;
     const csv = toCsv(
-      ["Score", "Name", "Category", "Phone", "Website", "Address", "Rating", "Reviews", "Gaps"],
+      [
+        "Score",
+        "Name",
+        "Category",
+        "Phone",
+        "Website",
+        "Address",
+        "Rating",
+        "Reviews",
+        "Gaps",
+        ...(data.scan.territoryName ? ["Territory"] : []),
+      ],
       data.results.map((r) => [
         r.score,
         r.name,
@@ -92,6 +127,9 @@ function ScanView({ tenantId, scanId }: { tenantId: string; scanId: string }) {
           .filter((k) => r.flags[k] === true)
           .map((k) => GAP_LABELS[k])
           .join("; "),
+        ...(data.scan.territoryName
+          ? [r.territoryStatus ? TERRITORY_STATUS_LABELS[r.territoryStatus] : ""]
+          : []),
       ]),
     );
     return URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
@@ -129,6 +167,7 @@ function ScanView({ tenantId, scanId }: { tenantId: string; scanId: string }) {
             <StatusBadge status={scan.status} />
             <span>Source: {scan.source}</span>
             {scan.sourceFileName ? <span>· {scan.sourceFileName}</span> : null}
+            {scan.territoryName ? <span>· Territory: {scan.territoryName}</span> : null}
             <span>· Started {formatDate(scan.startedAt ?? scan.createdAt)}</span>
           </p>
         </div>
@@ -161,6 +200,9 @@ function ScanView({ tenantId, scanId }: { tenantId: string; scanId: string }) {
           ["New prospects", scan.createdCount],
           ["Updated", scan.updatedCount],
           ["Skipped (closed)", scan.skippedClosedCount],
+          ...(scan.territoryName
+            ? [["Outside territory", scan.skippedOutsideTerritoryCount] as const]
+            : []),
           ["Errors", scan.errorCount],
         ].map(([label, value]) => (
           <Card key={label} className="py-3">
@@ -202,6 +244,7 @@ function ScanView({ tenantId, scanId }: { tenantId: string; scanId: string }) {
                   <TableHead className="w-16">Score</TableHead>
                   <TableHead>Business</TableHead>
                   <TableHead>Gaps</TableHead>
+                  {scan.territoryName ? <TableHead>Territory</TableHead> : null}
                   <TableHead className="text-right">Rating</TableHead>
                   <TableHead className="text-right">Reviews</TableHead>
                 </TableRow>
@@ -226,6 +269,11 @@ function ScanView({ tenantId, scanId }: { tenantId: string; scanId: string }) {
                     <TableCell>
                       <GapBadges flags={r.flags} max={4} />
                     </TableCell>
+                    {scan.territoryName ? (
+                      <TableCell>
+                        <TerritoryBadge status={r.territoryStatus} />
+                      </TableCell>
+                    ) : null}
                     <TableCell className="text-right tabular-nums">
                       {r.rating?.toFixed(1) ?? "—"}
                     </TableCell>

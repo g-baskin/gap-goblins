@@ -35,6 +35,12 @@ export interface NormalizedBusiness {
   isTemporarilyClosed: Tri;
   /** Only when the source itself provides one (omkar paid enrichment). Never discovered. */
   email: string | null;
+  /** Map point when the source provides one (omkar `coordinates`). Never guessed. */
+  point: { lat: number; lng: number } | null;
+  /** Where `point` came from. Absent means the source itself. */
+  pointSource?: "source" | "census-geocoder";
+  /** 5-digit ZIP from the source's postal code field or the end of its US address. */
+  postalCode: string | null;
   /** The source's original record, size-capped before storage. */
   rawPayload: Record<string, unknown> | null;
 }
@@ -62,6 +68,11 @@ export interface LeadSourceHealth {
 export interface LeadSource {
   id: LeadSourceId;
   label: string;
+  /**
+   * True for made-up sample data. Its addresses are never sent to the address lookup,
+   * because a fake address that happens to match a real street would look like a real result.
+   */
+  sampleData?: boolean;
   health(): Promise<LeadSourceHealth>;
   fetch(query: LeadSourceQuery, context: LeadSourceFetchContext): Promise<NormalizedBusiness[]>;
 }
