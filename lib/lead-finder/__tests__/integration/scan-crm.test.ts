@@ -250,12 +250,21 @@ suite("dedupe order kgmid → place_id → cid → phone_e164 → gbp_url", () =
       .from(leadBusinesses)
       .where(eq(leadBusinesses.id, byKgmid.businessId));
     expect(row.kgmid).toBe("/g/k1");
+    // A shared phone does not merge two businesses whose KGMIDs differ…
+    const phoneOwner = await up({ name: "Phone A", kgmid: "/g/pa", phoneE164: "+15405550177" });
+    const otherBiz = await up({ name: "Phone B", kgmid: "/g/pb", phoneE164: "+15405550177" });
+    expect(otherBiz.businessId).not.toBe(phoneOwner.businessId);
+    expect(otherBiz.created).toBe(true);
+    // …but still matches when the stored record has no KGMID (the phone row above).
+    expect((await up({ name: "T3", kgmid: "/g/t3", phoneE164: "+15405550111" })).businessId).toBe(
+      byPhone.businessId,
+    );
     // place_id beats cid.
     const placeVsCid = await up({ name: "pc", placeId: "PB", cid: "111" });
     expect(placeVsCid.businessId).toBe(byPlace.businessId);
 
-    expect(await countFor(contacts, tenantId)).toBe(5);
-    expect(await countFor(deals, tenantId)).toBe(5);
+    expect(await countFor(contacts, tenantId)).toBe(7);
+    expect(await countFor(deals, tenantId)).toBe(7);
   });
 });
 

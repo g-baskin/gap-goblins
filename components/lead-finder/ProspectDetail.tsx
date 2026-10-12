@@ -88,8 +88,14 @@ function ProspectView({ tenantId, businessId }: { tenantId: string; businessId: 
   }, [load]);
 
   // After "Generate PDF", poll every 2s until a new report appears (max 2 minutes).
+  // An interval (not a one-shot timeout) so polling continues while the count is unchanged.
   const reportCount = data?.reports.length ?? 0;
   const [countAtRequest, setCountAtRequest] = useState(0);
+  useEffect(() => {
+    if (waitingSince === null) return;
+    const timer = setInterval(load, 2000);
+    return () => clearInterval(timer);
+  }, [waitingSince, load]);
   useEffect(() => {
     if (waitingSince === null) return;
     if (reportCount > countAtRequest) {
@@ -97,14 +103,47 @@ function ProspectView({ tenantId, businessId }: { tenantId: string; businessId: 
       toast.success("PDF ready");
       return;
     }
-    if (Date.now() - waitingSince > 120_000) {
-      setWaitingSince(null);
-      toast.error("The PDF is taking longer than expected. Is the worker running?");
-      return;
-    }
-    const timer = setTimeout(load, 2000);
+    const remaining = 120_000 - (Date.now() - waitingSince);
+    const timer = setTimeout(
+      () => {
+        setWaitingSince(null);
+        toast.error("The PDF is taking longer than expected. Is the worker running?");
+      },
+      Math.max(remaining, 0),
+    );
     return () => clearTimeout(timer);
-  }, [waitingSince, reportCount, countAtRequest, load]);
+  }, [waitingSince, reportCount, countAtRequest]);
+
+  // Report preview: fetched as HTML and shown in a sandboxed srcdoc iframe. The app
+  // forbids framing its own routes (X-Frame-Options DENY, frame-ancestors 'none'),
+  // and srcdoc keeps that protection intact. sandbox="" disables scripts entirely.
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const latestResultId = data?.latestResult?.id ?? null;
+  useEffect(() => {
+    if (!latestResultId) return;
+    let cancelled = false;
+    fetch(`/api/lead-finder/businesses/${businessId}/report`, {
+      headers: { "x-tenant-id": tenantId },
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Preview failed (${response.status})`);
+        return response.text();
+      })
+      .then((html) => {
+        if (!cancelled) {
+          setPreviewHtml(html);
+          setPreviewError(null);
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) setPreviewError(e instanceof Error ? e.message : "Preview failed");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantId, businessId, latestResultId]);
 
   async function generate() {
     setGenerating(true);
@@ -305,17 +344,33 @@ function ProspectView({ tenantId, businessId }: { tenantId: string; businessId: 
               <Link className="text-primary hover:underline" href="/admin/lead-finder/branding">
                 Report branding
               </Link>
-              .
+              .{" "}
+              {latest ? (
+                <a
+                  className="text-primary hover:underline"
+                  href={previewUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Open in new tab
+                </a>
+              ) : null}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {latest ? (
-              <iframe
-                title="Gap report preview"
-                src={previewUrl}
-                sandbox=""
-                className="h-[1100px] w-full rounded-md border bg-white"
-              />
+              previewHtml ? (
+                <iframe
+                  title="Gap report preview"
+                  srcDoc={previewHtml}
+                  sandbox=""
+                  className="h-[1100px] w-full rounded-md border bg-white"
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {previewError ?? "Loading preview…"}
+                </p>
+              )
             ) : (
               <p className="text-sm text-muted-foreground">No scan result yet.</p>
             )}

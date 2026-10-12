@@ -7,7 +7,7 @@
  * - Re-scans never create a second contact or deal for the same business.
  * - Deal stages only ever move forward (by stage display order); re-scans never move them.
  */
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import {
   contacts,
   contactTimeline,
@@ -146,22 +146,35 @@ export async function findExistingBusiness(
   tenantId: string,
   business: Pick<NormalizedBusiness, DedupeKey>,
 ): Promise<{ id: string; matchedOn: DedupeKey } | null> {
+  const incomingKgmid = business.kgmid?.trim() || null;
   for (const candidate of dedupeCandidates(business)) {
+    const conditions = [
+      eq(leadBusinesses.tenantId, tenantId),
+      eq(dedupeColumns[candidate.key], candidate.value),
+    ];
+    // Phone numbers and Maps links are shared by distinct businesses (franchises,
+    // call centres, recycled numbers). KGMID is always unique, so a weak-key match
+    // is ignored when both records carry a KGMID and the KGMIDs differ.
+    if (incomingKgmid && WEAK_DEDUPE_KEYS.has(candidate.key)) {
+      const sameOrUnknown = or(
+        isNull(leadBusinesses.kgmid),
+        eq(leadBusinesses.kgmid, incomingKgmid),
+      );
+      if (sameOrUnknown) conditions.push(sameOrUnknown);
+    }
     const [row] = await db
       .select({ id: leadBusinesses.id })
       .from(leadBusinesses)
-      .where(
-        and(
-          eq(leadBusinesses.tenantId, tenantId),
-          eq(dedupeColumns[candidate.key], candidate.value),
-        ),
-      )
+      .where(and(...conditions))
       .orderBy(leadBusinesses.createdAt)
       .limit(1);
     if (row) return { id: row.id, matchedOn: candidate.key };
   }
   return null;
 }
+
+/** Keys that can be shared by different businesses; see findExistingBusiness. */
+const WEAK_DEDUPE_KEYS: ReadonlySet<DedupeKey> = new Set(["phoneE164", "gbpUrl"]);
 
 function businessColumns(business: NormalizedBusiness) {
   return {
