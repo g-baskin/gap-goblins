@@ -124,6 +124,20 @@ Command, run once in order on `7ced379`: `bun run lint && bun run typecheck && b
 6. **Stripe:** plans and metering (scans/month, PDFs/month), with Checkout plus the customer portal and webhooks. Needs owner approval for the new dependency and service.
 7. **Carry-overs from Milestone 1:** verify the omkar task contract with the app open and enable live scans behind a flag; test a real omkar export; add Chromium to `Dockerfile.worker`; do a browser click-through of the Lead Finder UI.
 
+## Additions after this report (2026-10-12, owner-approved, outside Milestone 1 scope)
+
+| Commit | What |
+| --- | --- |
+| `8791aab` | Fixes: report preview blocked by the frame CSP (now a sandboxed `srcdoc`), PDF polling stopping after one check, and phone or maps-link dedupe merging different businesses. |
+| `65d899b` | Local pre-push guard for `main`, `.dockerignore` excludes every `.env*` except `.env.example`, removed the CRM's dead Export CSV and Add Deal buttons, type-checking back on in 6 test files. |
+| `d4463d9` | Lead Finder territories and two-way Twilio SMS in the Conversations inbox. |
+
+- **Territories** (ADR 0005): ZIP-code and drawn-area territories per workspace, Census ZIP outlines, scans that skip businesses outside a territory and mark unknowns "Not checked". Migration `0015_lead_territories` (additive). New dependencies `leaflet@1.9.4`, `@geoman-io/leaflet-geoman-free@2.20.2`, `@types/leaflet@1.9.22`, pinned. Code adapted from PawOs2 `b78f88e` (recorded in `PROVENANCE.md`).
+- **SMS inbox** (ADR 0006, `COMPLIANCE.md`): the demo Conversations screen now uses the tenant-scoped conversation tables; each workspace connects its own Twilio number; incoming texts, replies and delivery updates work through the signed Twilio webhook; sends require recorded consent, respect 8pm–8am quiet hours, and honour STOP-type opt-outs. Migration `0016_conversation_inbox` (additive).
+- **Browser walkthroughs done since the report:** territories editor, Lead Finder scan form and territory scan results, Conversations inbox, Settings → Messaging (screenshots taken locally, not committed).
+- **Gate at `d4463d9`:** `bun run lint`, `bun run format:check`, `bun run typecheck`, `bun run typecheck:worker`, `bun run test:run` (1,675 passed, 12 skipped) and `bun run build:verify` all pass.
+- **Not verified:** a real text through Twilio (needs the owner's account, A2P 10DLC registration and a public https URL); drawing a territory with the mouse.
+
 ## Completion
 
-**Milestone 1 scope: 8 of 8 acceptance criteria met = 100%.** The omkar live-scan criterion is met by its "clearly disabled with an UNVERIFIED note" branch, not by a working live integration. The UI has not had a manual browser walkthrough (see above).
+**Milestone 1 scope: 8 of 8 acceptance criteria met = 100%.** The omkar live-scan criterion is met by its "clearly disabled with an UNVERIFIED note" branch, not by a working live integration. The UI had no manual browser walkthrough when this report was written; parts of it have had one since (see the section above).
