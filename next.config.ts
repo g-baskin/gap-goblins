@@ -10,6 +10,8 @@ const distDir = process.env.NEXT_DIST_DIR?.trim() || ".next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // The loopback login URL avoids cookies shared by other localhost apps.
+  allowedDevOrigins: ["127.0.0.1"],
   distDir,
 
   // Disable static optimization to prevent React 19 context issues during build

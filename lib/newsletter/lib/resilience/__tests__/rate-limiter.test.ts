@@ -12,7 +12,7 @@
  * - Edge cases
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createRateLimiter,
   type RateLimiterConfig,
@@ -532,16 +532,21 @@ describe("TokenBucketRateLimiter", () => {
     });
 
     it("should handle very large token counts", async () => {
-      const limiter = new TokenBucketRateLimiter({
-        maxTokens: 1000000,
-        refillRate: 1000000,
-        refillInterval: 60000,
-        name: "large-capacity",
-      });
+      const clock = vi.spyOn(Date, "now").mockReturnValue(0);
+      try {
+        const limiter = new TokenBucketRateLimiter({
+          maxTokens: 1000000,
+          refillRate: 1000000,
+          refillInterval: 60000,
+          name: "large-capacity",
+        });
 
-      await limiter.acquire(500000);
+        await limiter.acquire(500000);
 
-      expect(limiter.getAvailableTokens()).toBe(500000);
+        expect(limiter.getAvailableTokens()).toBe(500000);
+      } finally {
+        clock.mockRestore();
+      }
     });
 
     it("should handle fractional refill intervals", async () => {
