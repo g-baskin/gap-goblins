@@ -1,5 +1,9 @@
 # Gap Goblins
 
+<p align="center">
+  <img src="public/logos/gap-goblin.png" alt="Gap Goblins mascot: a green goblin detective with a magnifying glass" width="280" height="280" />
+</p>
+
 > They find the gaps. You get the bag.
 
 Gap Goblins is a local-business lead finder. Pick a niche and a location (or upload a Google Maps Extractor export), and it finds businesses with the weakest online presence, scores each one, files it as a prospect in the CRM, and produces a branded "gap report" PDF that explains what the business is missing. It is product #4 of the owner's four-product ecosystem.

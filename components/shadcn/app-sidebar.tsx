@@ -28,8 +28,8 @@ import {
 } from "@/components/shadcn/ui/sidebar";
 import { useSiteSettings } from "@/lib/site-settings-context";
 
-const DEFAULT_LOGO = "/logos/logo.svg";
-const DEFAULT_NAME = "__YOUR_BRAND__";
+const DEFAULT_LOGO = "/logos/gap-goblin.png";
+const DEFAULT_NAME = "Gap Goblins";
 
 const data = {
   navMain: [

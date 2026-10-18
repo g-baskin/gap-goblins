@@ -80,17 +80,18 @@ function LoginForm() {
           {/* Logo */}
           <div className="flex justify-center mb-6">
             <Image
-              src="/android-chrome-512x512.png"
-              alt="__YOUR_BRAND__"
-              width={180}
-              height={60}
-              className="h-14 w-auto"
+              src="/logos/gap-goblin.png"
+              alt="Gap Goblins"
+              width={96}
+              height={96}
+              className="h-24 w-24"
+              priority
             />
           </div>
 
           {/* Heading */}
           <h1 className="text-2xl font-bold text-center text-gray-900 mb-2">Welcome Back</h1>
-          <p className="text-center text-gray-500 mb-8">Sign in to __YOUR_BRAND__ Management</p>
+          <p className="text-center text-gray-500 mb-8">Sign in to Gap Goblins Management</p>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
