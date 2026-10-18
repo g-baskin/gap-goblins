@@ -9,6 +9,11 @@
   },
   "scripts": {
     "dev": "next dev --port 3510",
+    "hermes:setup": "python3 scripts/hermes.py setup",
+    "hermes:install": "python3 scripts/hermes.py install",
+    "hermes:status": "python3 scripts/hermes.py status",
+    "hermes:preview": "python3 scripts/hermes.py preview",
+    "hermes:test": "python3 scripts/hermes.py test",
     "build": "next build",
     "build:verify": "bun scripts/verify-production-build.ts",
     "start": "next start",

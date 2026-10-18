@@ -43,6 +43,20 @@ Territory support was adapted, not copied wholesale, from PawOs2 commit `b78f88e
 
 Not taken: PawOs2's trainer scheduling, travel-time and lesson logic.
 
+## Hermes local pilot
+
+The owner approved a local Hermes integration on 2026-10-18, limited initially to
+synthetic briefing data with live model access disabled, then approved replacing
+the machine-local dependency with a reproducible upstream setup. The official
+[NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) project
+(MIT) is fetched at commit `22063fc099ec9ad8357d7f8f6e6248a0400680d3` into an ignored
+runtime directory. Its committed `uv.lock` is used frozen; exact Python and uv
+versions are in `integrations/hermes/upstream.json`. No upstream implementation
+is vendored into this repository, and no global Hermes installation is used. The
+plugin, installer, fixtures, and tests under `integrations/hermes/` and
+`scripts/hermes.py` are original integration code. See `docs/hermes.md` for runtime
+isolation limitations and the remaining activation gates.
+
 ## Third-party services
 
 - Google Maps data reaches Gap Goblins only through `LeadSource` adapters (`fixture`, `csv-import`, `omkar-desktop`). There is no direct Google Maps scraping.

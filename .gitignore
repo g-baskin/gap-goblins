@@ -98,3 +98,7 @@ playwright-report/
 
 # local agent state (Gap Goblins)
 .gg-checklist.json
+/.hermes-gap-goblins/
+/.hermes-runtime/
+__pycache__/
+*.pyc

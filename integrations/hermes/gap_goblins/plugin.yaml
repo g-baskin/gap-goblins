@@ -1,0 +1,5 @@
+name: gap-goblins
+version: 0.1.0
+description: Owner-operated synthetic briefing; no live data or write actions.
+provides_tools:
+  - gap_goblins_briefing

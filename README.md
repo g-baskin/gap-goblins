@@ -18,6 +18,14 @@ Both apps can run side by side on one machine. Gap Goblins uses its own ports an
 
 Local S3 storage runs SeaweedFS (Apache-2.0) under the compose service name `minio`, because MinIO's free Docker images were withdrawn in September 2026. Keys, bucket (`media`) and env vars are unchanged; `docker compose up -d postgres minio minio-setup` starts everything.
 
+## Hermes briefing pilot
+
+With Git and Python 3.11+ installed, run **`bun run hermes:setup`**. It downloads the
+pinned official Hermes repository and provisions its own Python environment—no
+existing Hermes installation needed. Then run `bun run hermes:preview` for the
+synthetic demo or `bun run hermes:test` for checks. See the [setup guide](docs/hermes.md).
+Live data and model calls remain disabled; this is not yet an AI chat or public service.
+
 ## Local quality gate
 
 Hosted CI is switched off (the old GitHub Actions config lives in `docs/reference/disabled-github-config/`). Run this before every commit:
