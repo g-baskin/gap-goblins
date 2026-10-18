@@ -1,39 +1,38 @@
 <!-- gg:init:start -->
 # Gap Goblins
 
-Local-business lead finder: niche + location → businesses → weakest-online-presence score → CRM prospect → branded "gap report" PDF. Product #4 of the owner's four-product ecosystem.
+Agency prospecting: niche/location or CSV → scored local businesses → CRM prospects → branded gap-report PDFs; territories constrain scans and a tenant-owned Twilio inbox supports SMS.
 
-## Current state
+`CONTEXT.md` owns domain names; `docs/adr/` records decisions. `_planning/01-m0-m1-build-prompt.md` supersedes `00-original-brief.md`. Inherited notes below describe the forked CRM, not permission to use its legacy outreach paths. Corrections here take precedence over those notes.
 
-- Bootstrapped from online-crm-ai@eabca74 with fresh history (`PROVENANCE.md`); its own git repo, remote `g-baskin/gap-goblins` (private). `main` = bootstrap, `dev` from main, Milestone 1 on `feat/m1-scan-score-report`.
-- Active spec: `_planning/01-m0-m1-build-prompt.md` (wins over `_planning/00-original-brief.md`). Recon: `_planning/phase-0-recon.md`.
-- The inherited notes below the fenced block describe the online-crm-ai base; Gap Goblins ports are 3510 / 5442 / 9010-9011.
+## Owner constraints
 
-Read CONTEXT.md before naming anything. Hard-to-reverse decisions are recorded in `docs/adr/`.
+- Never modify `online-crm-ai` (including checkout/stash). Read source only through `git -C … show/ls-tree/archive <sha>`; compare its `git status --porcelain | shasum` before/after access to prove it is untouched.
+- Copying allowed: online-crm-ai, g-baskin/Legend-Copy-AI, hitb1099/outreach-os, quionie/outreach-ai, AbdelftahZowail/Quickly (MIT); omkarcloud/google-maps-scraper **docs only**; proprietary g-baskin/PawOs2 and g-baskin/proximity-scheduling (owner-approved). Record reuse in `PROVENANCE.md`. Never copy/closely paraphrase GPL pypesdev/coldflow; never touch AGPL LegendCopy or voice-agent-template.
+- Resend is transactional/system-only: its AUP forbids cold email/scraped data. Milestone 1 sends no prospect email; planned outreach uses tenants' Gmail/M365 mailboxes on separate domains. Legacy Resend outreach code still exists; its presence is not authorization.
+- No direct Maps scraping: acquisition goes through `LeadSource` adapters. Call omkar's local API with `fetch`, not `botasaurus-desktop-api`. Unverified contracts must stay disabled with an explicit UNVERIFIED error, never invented results.
+- Owner approval required for new npm dependencies (except the already-approved Playwright move to production dependencies), external services, Dockerfile/deploy changes, feature deletion, force-pushes and public exposure.
+- New tables require `tenant_id NOT NULL`, an FK and tenant-leading indexes; migrations are additive. Legacy `outreach_*`, `site_settings`, `admin_settings`, `integration_credentials` are not tenant-safe storage; use tenant-owned tables such as `tenant_branding` instead.
+- Hosted CI remains disabled because it is unpaid; archived GitHub configuration belongs in `docs/reference/disabled-github-config/`, not active workflows.
 
-## Hard rules (owner decisions, final)
+## Behavioral traps
 
-- **Never modify `online-crm-ai`** (no checkout, stash, commit or edits). It has uncommitted work on `fix/automation-release-review`. Read it only with `git -C … show/ls-tree/archive <sha>`. Prove it is untouched by comparing `git status --porcelain | shasum` before and after.
-- **Licenses:** you may copy from online-crm-ai, g-baskin/Legend-Copy-AI, omkarcloud/google-maps-scraper (docs only), hitb1099/outreach-os, quionie/outreach-ai and AbdelftahZowail/Quickly (all MIT), plus the owner's proprietary g-baskin/PawOs2 and g-baskin/proximity-scheduling (approved 2026-10-12; record what you take in `PROVENANCE.md`). pypesdev/coldflow is GPL-3.0: never copy it or closely paraphrase it. Never touch LegendCopy or voice-agent-template (AGPL).
-- **Resend is for system/transactional email only.** Never use it for prospect outreach, because its Acceptable Use Policy bans cold email and scraped data. Outreach in Milestone 2 goes through tenants' connected Gmail/M365 mailboxes on separate domains. Milestone 1 sends no email to prospects at all.
-- **No direct Google Maps scraping.** Leads come only through `LeadSource` adapters: `fixture`, `csv-import` (omkar exports + generic CSV) and `omkar-desktop` (local API via `fetch`; do not add the `botasaurus-desktop-api` package).
-- No fake results. If a contract can't be verified, disable the feature with an explicit error and mark it UNVERIFIED.
-- Ask the owner before: any new npm dependency (the one exception is moving `playwright` to dependencies), a new external service, Dockerfile/deploy changes, deleting features, force-pushing, or making anything public.
-- New tables need `tenant_id NOT NULL` with an FK and tenant-leading indexes. Use additive migrations only.
-- The legacy `outreach_*` tables, `site_settings`, `admin_settings` and `integration_credentials` in the base repo are **not tenant-scoped**. Don't use them for tenant data (for example, branding goes in `tenant_branding`).
+- Admin authentication does not imply tenant membership. Lead Finder and Conversations resolve active membership; multiple memberships require explicit tenant selection. Keep row ownership checks even after tenant resolution.
+- Unknown gap flags score zero and display "Not checked". In `scoring.ts`, `website=null` is unknown but `""` means missing; zero reviews cannot earn low-rating points. Unclaimed/thin profile bonuses are mutually exclusive. Persist the `scoring-config.ts` rubric version with results.
+- Dedupe priority is kgmid → place_id → cid → phone_e164 → gbp_url. Phone/maps links may be shared: reject those weak matches when both KGMIDs exist and differ. Preserve tenant-scoped transactional upserts/locks; rescans must reuse contacts/deals and never move stages backward.
+- Gap-report copy is deterministic, not LLM-generated: no guarantees, invented stats or named competitors. PDFs run in the worker with JS disabled and all network blocked; use escaped text, inline assets/data-URI logos and tenant-prefixed storage keys. Preview uses sandboxed `srcDoc`: a route-backed iframe conflicts with frame protection.
+- Territory membership is a union of ZIPs and drawn areas. Outside businesses are skipped; unknown location is retained as "Not checked", not treated as outside.
+- Inbox and automation share SMS consent/DND/quiet-hour checks. Ordinary inbound texts do not grant consent; STOP revokes it. Twilio callback signature verification uses `NEXT_PUBLIC_SITE_URL`, which must match the public callback URL.
+- Omkar reachability is not contract verification. Use `OMKAR_DESKTOP_API_URL` and API-shape health checks: localhost:8000 has historically reached an unrelated service. Current live-search work is gated by `OMKAR_LIVE_SCANS=on` but still reports UNVERIFIED; the switch is not evidence of a verified contract.
 
-## Local environment gotchas
+## Local workflow exceptions
 
-- Ports 5432, 9000 and 3500 (online-crm-ai) are already taken on this machine, as are the containers named `app-postgres`/`app-minio`. Gap Goblins uses dev port 3510, Postgres 5442, MinIO 9010/9011, containers `gap-goblins-postgres`/`gap-goblins-minio` and database `gap_goblins`.
-- omkar Google Maps Extractor (desktop app in /Applications) binds `*:8000`, but a Docker uvicorn service, `fastapi-click-api`, holds `127.0.0.1:8000`. So `localhost:8000` reaches the wrong service. Read `OMKAR_DESKTOP_API_URL`, never hardcode the port, and have the health check confirm the response really comes from omkar.
-- omkar data: `KGMID` is the only field that is always unique and non-null (`PLACE_ID` can be missing). Dedupe order: kgmid → place_id → cid → phone_e164 → gbp_url. Emails come only from omkar's paid enrichment.
-- Hosted CI is unpaid. Move `.github/workflows/*` and `dependabot.yml` to `docs/reference/disabled-github-config/` (move them, don't delete them). The local gate, in order: `bun run lint && bun run typecheck && bun run typecheck:worker && bun run test:run && bun run build`. Record baseline failures before making changes.
-
-## Domain invariants (Milestone 1)
-
-- The scoring rubric lives in `lib/lead-finder/scoring-config.ts` with `RUBRIC_VERSION`. Each flag is true, false or `"unknown"`. Unknown scores 0 and displays as "Not checked". `gbp_unclaimed` and `gbp_thin` are mutually exclusive, so the +40 counts once.
-- Re-scans never duplicate contacts or deals and never move a deal's stage backward.
-- Report copy comes from deterministic templates (no LLM): no guarantees, no invented stats, no named competitors. Render the PDF with Playwright in the worker, with JavaScript disabled and the network blocked (the logo is a data URI). Escape all scraped text. PDFs live under tenant-prefixed keys and are served only through tenant-checked routes.
+- Keep isolated ports: web 3510, Postgres 5442, S3 9010/filer UI 9011; sibling CRM uses the default ports. Compose's `minio` service is **SeaweedFS**, not MinIO. Include `minio-setup` when bringing up storage: starting only `postgres minio` omits creation of the `media` bucket.
+- Admin creation is not tenant onboarding: `scripts/create-tenant.ts` needs `--slug`, `--name`, `--admin-user-id` for an existing active admin. Legacy `db:seed` creates the old sales pipeline; Lead Finder creates its own tenant-scoped prospect pipeline.
+- Worker startup also registers/schedules legacy outreach and automation; it is not a scan-only process. Preserve its `react-server` condition and worker DB imports rather than importing the web's `server-only` DB client.
+- `Dockerfile.worker` does not provision Chromium or its OS dependencies; a Playwright dependency alone cannot make production PDFs work. Provisioning needs owner approval.
+- `build:verify` isolates output in `.next-verify` and restores Next-mutated type/config files to avoid disrupting the dev build. Docker deployment still expects `.next`.
+- The pre-push hook blocks remote `main`; intentional releases use `ALLOW_MAIN_PUSH=1`. This is a local hook, not server-side protection.
 <!-- gg:init:end -->
 
 # Inherited base notes (online-crm-ai@eabca74)

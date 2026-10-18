@@ -41,7 +41,7 @@ These are inherited starting points, not claims of completed omnichannel archite
 | **Inbox** | Email-focused threaded replies, suggested responses, intent/sentiment badges |
 | **Newsletter** | AI-assisted generation, queue pipeline, subscriber management |
 | **Admin** | NextAuth credentials + TOTP foundations, users, appearance (theme + colour schemes) |
-| **Storage** | S3-compatible uploads (MinIO local / Tigris on Railway) |
+| **Storage** | S3-compatible uploads (SeaweedFS locally; configured S3 provider in production) |
 
 ---
 
@@ -63,27 +63,52 @@ These are inherited starting points, not claims of completed omnichannel archite
 
 ## Quick Start
 
-**Prerequisites:** Bun ≥ 1.3, Docker Desktop
+**Prerequisites:** Bun 1.3.14, Node.js 22 (web Docker runtime: 22.22.2), Docker Desktop.
 
 ```bash
 git clone git@github.com:g-baskin/gap-goblins.git
 cd gap-goblins
-bun install
-
+bun install --frozen-lockfile
 cp .env.example .env.local
-# Fill minimum local vars (see HANDOFF.md):
-#   DATABASE_URL, AUTH_SECRET, NEXTAUTH_URL, NEXT_PUBLIC_SITE_URL, INTEGRATION_ENCRYPTION_KEY
-
-docker compose up -d postgres minio
-bun run db:migrate
-bun run db:seed          # sales pipeline + stages
-bun scripts/create-admin.ts   # first super_admin user
-
-bun run dev              # http://localhost:3510 → /admin
-bun run worker           # separate terminal — outreach + newsletter jobs
+# Fill local DATABASE_URL, AUTH_SECRET, NEXTAUTH_URL, NEXT_PUBLIC_SITE_URL,
+# INTEGRATION_ENCRYPTION_KEY and BUCKET_* storage values (see HANDOFF.md).
+docker compose up -d postgres minio minio-setup
+# Wait for Postgres/storage health and successful bucket setup before continuing.
+bun --env-file=.env.local run db:migrate
+bun --env-file=.env.local scripts/create-admin.ts
 ```
 
-See [`HANDOFF.md`](HANDOFF.md) for full env reference, placeholder token replacement, and production deploy.
+Admin creation does not grant tenant access. Find the new admin's ID in `admin_users`
+using local Drizzle Studio (`bun --env-file=.env.local run db:studio`), then run:
+
+```bash
+# Replace REPLACE_WITH_ADMIN_ID with the ID found above:
+bun --env-file=.env.local scripts/create-tenant.ts --slug local-agency --name "Local agency" --admin-user-id "REPLACE_WITH_ADMIN_ID"
+# Install the browser matching the locked Playwright dependency for local PDFs:
+bun node_modules/playwright/cli.js install chromium
+# On Linux, browser OS libraries may also require an approved --with-deps install.
+bun run dev              # http://localhost:3510 → /admin
+bun run worker           # separate terminal — scans, PDFs and retained legacy jobs
+```
+
+The legacy `db:seed` is optional for the old sales pipeline; Lead Finder creates its
+own tenant-scoped prospect pipeline. The worker also schedules legacy outreach;
+do not configure prospect sending through Resend. Use fixture/CSV scans locally;
+omkar live scanning remains UNVERIFIED.
+
+### Clean build verification
+
+In a fresh checkout with the setup above completed, run the ordered local gate
+shown above. Do not reuse another checkout's `node_modules` or `.next` output.
+Record the commit, runtime versions, command results and skipped tests. Missing
+required test infrastructure is a blocker, not a pass. `bun run build` creates
+`.next`; `bun run start` serves the production build (default port 3000).
+
+These are documented steps, not a claim of a verified clean-clone build. The
+worker Docker image still lacks Chromium provisioning: installing it locally does
+not fix production PDFs. See [manual releases](HANDOFF.md#manual-release-checklist)
+for migration order, release evidence and recovery; the image blocker must be
+resolved and PDF generation verified before shipping it.
 
 ---
 
@@ -161,7 +186,7 @@ proxy.ts                   # Next.js 16 proxy (auth + CSRF + CSP; replaces middl
 
 ### Architecture notes
 
-- **Database**: All queries go through `db` from `@/lib/db` (Drizzle, server-only). Schema uses camelCase columns.
+- **Database**: Web code uses `@/lib/db` (Drizzle, server-only); worker/scripts use `lib/db/worker.ts`. TypeScript schema properties map to SQL column names; do not assume they are identical.
 - **Storage**: File access via `lib/storage/index.ts`. Served through authenticated proxy routes — never public S3 URLs.
 - **Security**: Nonce-based CSP per request, CSRF origin check on state-changing API routes, NextAuth session required for `/admin/*`.
 - **Worker**: The `website` service enqueues jobs; the `worker` service polls pg-boss and runs handlers.
@@ -176,10 +201,10 @@ See [`CLAUDE.md`](CLAUDE.md) for locked patterns (Cal.com webhook URL, outreach 
 | Service | Start command |
 |---------|---------------|
 | `website` | `node .next/standalone/server.js` |
-| `worker` | `bun scripts/worker.ts` |
+| `worker` | `bun --conditions react-server scripts/worker.ts` |
 | `Postgres` | managed (also hosts `pgboss` schema) |
 
-Branch flow is `dev → qa → main`: work lands on `dev`, release candidates promote to `qa`, and `main` is production only. Pushes to `main` deploy the Railway `website` and `worker`; configure env vars from `.env.example`.
+Release actions require separate owner approval; `/commit` stops at a local commit. Confirm the actual Railway project, environments, service names, source branches and auto-deploy settings before any push. Do not assume a `qa` branch/environment exists. Follow the [manual release checklist](HANDOFF.md#manual-release-checklist).
 
 **Locked patterns** (do not change without reading docs): Cal.com webhook on `hooks.__YOUR_DOMAIN__`, outreach Reply-To = sender plain mailbox, AI voice rules in `lib/outreach/ai/reply-analyzer.ts`. See [`CLAUDE.md`](CLAUDE.md).
 

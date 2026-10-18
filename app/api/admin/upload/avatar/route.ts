@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { adminUsers } from "@/lib/db/schema";
 import { deleteFile, uploadFile } from "@/lib/storage";
+import { ownedMediaKey } from "@/lib/storage/owned-media";
 
 const ALLOWED_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const MAX_SIZE = 2 * 1024 * 1024; // 2 MB
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const filename = generateFilename(detected.ext);
+  const filename = `${session.user.id}--${generateFilename(detected.ext)}`;
   const path = `avatars/${filename}`;
 
   await uploadFile(path, buffer, { contentType: detected.mime });
@@ -59,8 +60,8 @@ export async function POST(request: NextRequest) {
     .where(eq(adminUsers.id, session.user.id))
     .limit(1);
 
-  if (user?.avatarUrl) {
-    const oldPath = user.avatarUrl.replace(/^\/api\/media\//, "");
+  const oldPath = ownedMediaKey("avatars", session.user.id, user?.avatarUrl);
+  if (oldPath) {
     deleteFile(oldPath).catch(() => {});
   }
 
@@ -86,8 +87,8 @@ export async function DELETE() {
     .where(eq(adminUsers.id, session.user.id))
     .limit(1);
 
-  if (user?.avatarUrl) {
-    const oldPath = user.avatarUrl.replace(/^\/api\/media\//, "");
+  const oldPath = ownedMediaKey("avatars", session.user.id, user?.avatarUrl);
+  if (oldPath) {
     deleteFile(oldPath).catch(() => {});
   }
 

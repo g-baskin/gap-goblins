@@ -2,7 +2,8 @@
  * omkar-desktop lead source: the omkarcloud Google Maps Extractor desktop app's
  * built-in local API (Botasaurus Desktop API), called with plain fetch.
  *
- * Status: live scanning is DISABLED and marked UNVERIFIED.
+ * Status: live scanning is OFF unless OMKAR_LIVE_SCANS=on, and UNVERIFIED until a live test
+ * search confirms the task API (see omkar-live.ts for what is and is not verified yet).
  * - The HTTP routes are documented in the official client source
  *   (https://github.com/omkarcloud/botasaurus/blob/master/js/botasaurus-desktop-api/src/index.ts):
  *   GET / (health), GET /tasks (paginated list), POST /tasks/create-task-async,
@@ -18,16 +19,21 @@
  * like a Botasaurus task API before reporting it reachable.
  */
 import { type LeadSource, type LeadSourceHealth, LeadSourceUnavailableError } from "../types";
+import { runOmkarSearch } from "./omkar-live";
 
 export const OMKAR_UNVERIFIED_MESSAGE =
-  "omkar desktop live scanning is disabled: the Google Maps Extractor task input contract is UNVERIFIED. " +
-  "Export your results from the omkar app and use CSV import instead.";
+  "omkar desktop live scanning is off (UNVERIFIED until a confirmed test search; the owner turns it on " +
+  "with OMKAR_LIVE_SCANS=on). Export your results from the omkar app and use CSV import instead.";
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 export interface OmkarConfig {
   baseUrl: string | null;
   timeoutMs: number;
+  /** OMKAR_LIVE_SCANS=on: the owner's switch for running real searches through the app. */
+  liveScans?: boolean;
+  /** Longest a whole search may take (OMKAR_TASK_TIMEOUT_MS, default 15 minutes). */
+  taskTimeoutMs?: number;
 }
 
 export function readOmkarConfig(
@@ -35,9 +41,15 @@ export function readOmkarConfig(
 ): OmkarConfig {
   const raw = env.OMKAR_DESKTOP_API_URL?.trim();
   const timeout = Number.parseInt(env.OMKAR_DESKTOP_TIMEOUT_MS ?? "", 10);
+  const taskTimeout = Number.parseInt(env.OMKAR_TASK_TIMEOUT_MS ?? "", 10);
   return {
     baseUrl: raw ? raw.replace(/\/+$/, "") : null,
     timeoutMs: Number.isFinite(timeout) && timeout > 0 ? Math.min(timeout, 60_000) : 10_000,
+    liveScans: env.OMKAR_LIVE_SCANS?.trim().toLowerCase() === "on",
+    taskTimeoutMs:
+      Number.isFinite(taskTimeout) && taskTimeout > 0
+        ? Math.min(taskTimeout, 60 * 60_000)
+        : 15 * 60_000,
   };
 }
 
@@ -121,6 +133,17 @@ export async function checkOmkarHealth(
           "(GET /tasks did not return a Botasaurus task list). Check OMKAR_DESKTOP_API_URL.",
       };
     }
+    if (config.liveScans) {
+      return {
+        available: true,
+        reachable: true,
+        identityConfirmed: true,
+        contract: "unverified",
+        message:
+          `omkar desktop API found at ${config.baseUrl}. Live scans are ON (OMKAR_LIVE_SCANS=on) ` +
+          "and UNVERIFIED until a test search is confirmed. Each scan uses your omkar search quota.",
+      };
+    }
     return {
       available: false,
       reachable: true,
@@ -150,7 +173,20 @@ export const omkarDesktopSource: LeadSource = {
     const { available, contract, message } = await checkOmkarHealth();
     return { available, contract, message };
   },
-  async fetch() {
-    throw new LeadSourceUnavailableError("omkar-desktop", OMKAR_UNVERIFIED_MESSAGE);
+  async fetch(query, context) {
+    const config = readOmkarConfig();
+    if (!config.liveScans || !config.baseUrl) {
+      throw new LeadSourceUnavailableError("omkar-desktop", OMKAR_UNVERIFIED_MESSAGE);
+    }
+    return runOmkarSearch(
+      query,
+      {
+        baseUrl: config.baseUrl,
+        timeoutMs: config.timeoutMs,
+        taskTimeoutMs: config.taskTimeoutMs ?? 15 * 60_000,
+        pollIntervalMs: 5000,
+      },
+      { signal: context.signal },
+    );
   },
 };
