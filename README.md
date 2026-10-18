@@ -28,7 +28,7 @@ Live data and model calls remain disabled; this is not yet an AI chat or public 
 
 ## Local quality gate
 
-Hosted CI is switched off (the old GitHub Actions config lives in `docs/reference/disabled-github-config/`). Run this before every commit:
+GitHub CI runs on pushes and pull requests to `main` using `.github/workflows/ci.yml`. Dependabot checks Bun dependencies and GitHub Actions weekly. Historical configuration remains in `docs/reference/disabled-github-config/`. Run this before every commit:
 
 ```bash
 bun run lint && bun run typecheck && bun run typecheck:worker && bun run test:run && bun run build

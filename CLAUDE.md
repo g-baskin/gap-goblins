@@ -13,7 +13,7 @@ Agency prospecting: niche/location or CSV → scored local businesses → CRM pr
 - No direct Maps scraping: acquisition goes through `LeadSource` adapters. Call omkar's local API with `fetch`, not `botasaurus-desktop-api`. Unverified contracts must stay disabled with an explicit UNVERIFIED error, never invented results.
 - Owner approval required for new npm dependencies (except the already-approved Playwright move to production dependencies), external services, Dockerfile/deploy changes, feature deletion, force-pushes and public exposure.
 - New tables require `tenant_id NOT NULL`, an FK and tenant-leading indexes; migrations are additive. Legacy `outreach_*`, `site_settings`, `admin_settings`, `integration_credentials` are not tenant-safe storage; use tenant-owned tables such as `tenant_branding` instead.
-- Hosted CI remains disabled because it is unpaid; archived GitHub configuration belongs in `docs/reference/disabled-github-config/`, not active workflows.
+- The owner approved public GitHub hosting and CI on 2026-10-18. Active CI is `.github/workflows/ci.yml`: one Ubuntu job, 15-minute timeout, read-only permissions. Historical configuration stays in `docs/reference/disabled-github-config/`.
 
 ## Behavioral traps
 
@@ -95,4 +95,4 @@ Bun/Next.js admin console for CRM pipeline management, outreach campaigns and re
 - `Dockerfile.worker` installs production deps and runs `bun --conditions react-server scripts/worker.ts`.
 - `railway.json` uses `Dockerfile`, starts the website with `node .next/standalone/server.js`, and healthchecks `/api/health`.
 - `railway.worker.json` uses `Dockerfile.worker`, starts the worker command, and restarts on failure.
-- Hosted CI is disabled; the old workflows and dependabot config are kept in `docs/reference/disabled-github-config/`. Local gate: `bun run lint && bun run typecheck && bun run typecheck:worker && bun run test:run && bun run build`.
+- Hosted CI and weekly Dependabot updates are enabled in `.github/`; historical configuration is kept in `docs/reference/disabled-github-config/`. Local gate: `bun run lint && bun run typecheck && bun run typecheck:worker && bun run test:run && bun run build`.
