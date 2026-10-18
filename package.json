@@ -134,7 +134,7 @@
     "happy-dom": "^20.9.0",
     "husky": "^9.1.7",
     "knip": "^6.14.2",
-    "lint-staged": "^16.4.0",
+    "lint-staged": "^17.6.0",
     "postcss": "^8.5.30",
     "tailwindcss": "^4.3.0",
     "tsx": "^4.22.3",
