@@ -6,6 +6,19 @@
 
 > They find the gaps. You get the bag.
 
+## Public snapshot and license
+
+This repository is the public Gap Goblins snapshot. Ongoing private development
+is separate and is not automatically published here. Public releases require an
+explicit owner decision.
+
+Copyright (c) 2026 Gap Goblins contributors. This snapshot is licensed under the
+GNU Affero General Public License version 3 only (`AGPL-3.0-only`); see [LICENSE](LICENSE).
+Third-party code and dependencies retain their own notices and applicable licenses;
+see [PROVENANCE.md](PROVENANCE.md). AGPL section 13 requires operators of modified
+versions to offer corresponding source to users interacting with them over a network.
+Previously granted rights to this snapshot are not revoked by later private development.
+
 Gap Goblins is a local-business lead finder. Pick a niche and a location (or upload a Google Maps Extractor export), and it finds businesses with the weakest online presence, scores each one, files it as a prospect in the CRM, and produces a branded "gap report" PDF that explains what the business is missing. It is product #4 of the owner's four-product ecosystem.
 
 ## Relationship to online-crm-ai
