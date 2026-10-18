@@ -2,13 +2,11 @@
 
 > **Gap Goblins note.** This guide was inherited from online-crm-ai@eabca74 (see `PROVENANCE.md`). Gap Goblins runs on dev port **3510**, Postgres **5442** (database `gap_goblins`, container `gap-goblins-postgres`) and S3 storage **9010/9011** (container `gap-goblins-minio`, SeaweedFS because MinIO's free images were withdrawn in Sept 2026), so it can run beside online-crm-ai (3500 / 5432 / 9000). Hosted CI is off; the local gate is `bun run lint && bun run typecheck && bun run typecheck:worker && bun run test:run && bun run build`. Lead Finder settings: `OMKAR_DESKTOP_API_URL`, `OMKAR_DESKTOP_TIMEOUT_MS`, `LEAD_SCAN_MAX_RESULTS_CAP` (see `.env.example`). Resend is for system email only; it never sends prospect outreach.
 
-This is a Next.js 16 admin platform with outreach (cold email), a newsletter
-pipeline, CRM, and a pg-boss worker. It was forked from a branded internal tool
-and stripped to a generic state — all brand strings, secrets, and personal info
-are replaced with placeholder tokens you'll swap in below.
-
-Follow this guide top-to-bottom for a working local dev environment, then
-production.
+Gap Goblins is a tenant-scoped local-business prospecting application with CRM,
+territories, branded gap reports and a Twilio SMS inbox. Legacy outreach/newsletter
+code remains from the fork; its presence does not authorize prospect email.
+Use README Quick Start for local setup and the manual release checklist below for
+production preparation. Neither guide certifies a successful deployment.
 
 ---
 
@@ -16,8 +14,8 @@ production.
 
 Install these once on your machine:
 
-- **Bun** ≥ 1.3 — `curl -fsSL https://bun.sh/install | bash`
-- **Docker Desktop** (for local Postgres + MinIO)
+- **Bun** 1.3.14 (matches `packageManager` and Docker builds)
+- **Docker Desktop** (for local Postgres + SeaweedFS, whose service is named `minio`)
 - **Node** ≥ 22 (Bun uses Node-compatible APIs; some tools still want it)
 - A code editor (VS Code, Cursor, etc.)
 
@@ -27,31 +25,15 @@ Optional but useful:
 
 ---
 
-## 2. Local setup (10 minutes)
+## 2. Local setup
 
-```bash
-# Clone & install
-git clone <your-repo-url> my-app
-cd my-app
-bun install
+Follow [README Quick Start](README.md#quick-start), the canonical fresh-checkout
+sequence. It uses Bun 1.3.14, a frozen lockfile, explicit `.env.local` loading,
+`minio-setup` for the SeaweedFS bucket, committed database migrations, an admin
+with tenant membership, and a local Playwright Chromium installation.
 
-# Start local Postgres + MinIO
-docker compose up -d
-
-# Copy env template, then fill it in (see section 3)
-cp .env.example .env.local
-
-# Apply database schema (creates all tables)
-bun run db:push
-
-# Run it
-bun run dev          # web app on http://localhost:3510
-bun run worker       # pg-boss worker (separate terminal — for outreach sends & newsletter jobs)
-```
-
-Visit http://localhost:3510/admin — you'll hit the login page. There's no seed
-user yet; create one via the database (section 5) or wire up your own signup
-route.
+Do not substitute `db:push` for migration history. Installing Chromium on a laptop
+does not provision the production worker image; that release blocker remains open.
 
 ---
 
@@ -67,9 +49,14 @@ copy it, then fill in real values for the ones you need.
 | `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5442/gap_goblins` | Matches `docker-compose.yml` defaults |
 | `AUTH_SECRET` | `openssl rand -base64 32` | Required by NextAuth |
 | `NEXT_PUBLIC_SITE_URL` | `http://localhost:3510` | Used in email templates & previews |
-| `BUCKET_*` | Defaults in `.env.example` work with the bundled MinIO | Bucket name `media` is auto-created |
+| `BUCKET_*` | Local S3 values from `.env.example`, matched to compose | SeaweedFS; `media` is created by `minio-setup`, not the storage process itself |
+| `NEXTAUTH_URL` | `http://localhost:3510` | Local auth URL |
+| `INTEGRATION_ENCRYPTION_KEY` | Generate as directed in `.env.example` | Protects stored integration credentials; keep stable and private |
 
-### To send email (optional in dev)
+### System email only (optional in dev)
+
+Resend must not send prospect outreach or scraped-contact campaigns. Leave sending
+unconfigured unless testing an approved system-email flow with controlled recipients.
 
 | Var | Where to get it |
 |---|---|
@@ -85,10 +72,13 @@ copy it, then fill in real values for the ones you need.
 
 ### Webhook secrets (generate fresh ones)
 
-Generate each with `openssl rand -hex 32`:
+For provider webhooks, use the signing secret assigned/configured for that exact
+endpoint; generating an unrelated local value will break signature verification.
+Generate application-owned shared secrets with `openssl rand -hex 32` and configure
+both ends consistently.
 
-- `CAL_WEBHOOK_SECRET` — Cal.com booking webhook signing
-- `RESEND_WEBHOOK_SECRET` — Resend events (opens/clicks/bounces)
+- `CAL_WEBHOOK_SECRET` — must match the Cal.com booking webhook signing configuration
+- `RESEND_WEBHOOK_SECRET` — copy from the Resend webhook configuration
 - `CRON_SECRET` / `OUTREACH_CRON_SECRET` — gates cron endpoints
 - `UNSUBSCRIBE_SECRET` — signs unsubscribe links
 - `NEWSLETTER_API_KEY` / `OUTREACH_API_KEY` — gate internal API routes
@@ -103,9 +93,10 @@ Generate each with `openssl rand -hex 32`:
 
 ## 4. Replace the placeholder tokens
 
-The repo contains a handful of placeholder strings you must find-and-replace
-project-wide. Each token is intentionally unique so you can use a single
-find-and-replace per token, including across markdown.
+Inherited UI copy and templates contain placeholder strings. Review their callers
+before replacing them; do not bulk-replace test fixtures, historical notes or prompt
+contracts. Tenant report branding belongs in `tenant_branding`, not global settings.
+The table below is a reference, not a required project-wide replacement operation.
 
 | Token | Replace with | Example |
 |---|---|---|
@@ -122,10 +113,10 @@ find-and-replace per token, including across markdown.
 
 ### Quick check
 
-After your find-and-replace, this should print nothing:
+List tracked placeholder uses for review (some are intentional and should remain):
 
 ```bash
-grep -rn "__YOUR_\|__SENDER_" --include="*.ts" --include="*.tsx" --include="*.md" .
+git grep -n -E '__YOUR_|__SENDER_' -- '*.ts' '*.tsx' '*.md'
 ```
 
 ### Branding assets
@@ -140,58 +131,48 @@ Drop your own files at:
 
 ## 5. Creating the first admin user
 
-There's no built-in signup flow — the platform assumes invite-only admin
-access. To create your first user, run this against your local DB:
+Use `bun --env-file=.env.local scripts/create-admin.ts` against the local migrated
+database. It validates the password and writes the actual `admin_users` schema.
+Do not use inherited SQL targeting a `user` table.
 
-```sql
--- Replace email + password hash
-INSERT INTO "user" (id, name, email, "passwordHash", role)
-VALUES (
-  gen_random_uuid(),
-  'Admin',
-  'you@example.com',
-  '<bcrypt hash — generate with: bun -e "console.log(await Bun.password.hash(\"yourpass\"))">',
-  'super_admin'
-);
-```
-
-Or use `bun run db:studio` to open Drizzle Studio and insert via the UI.
-
-Once logged in, you can invite further admins via **Settings → Users**.
+Then obtain that admin's ID and run `scripts/create-tenant.ts` with `--slug`,
+`--name` and `--admin-user-id`, as shown in README Quick Start. Login alone does
+not establish tenant membership. Further admin invitations are available in
+**Settings → Users**; tenant access must still be assigned explicitly.
 
 ---
 
 ## 6. Verifying everything works
 
 ```bash
-bun run lint        # ESLint — must be 0 errors
-bun run typecheck   # TypeScript strict mode — must be clean
-bun run test:run    # Vitest — all 1320+ tests must pass
-bun run build       # Production build — must succeed
+bun run lint && bun run typecheck && bun run typecheck:worker && bun run test:run && bun run build
 ```
 
-All four green = you're good to deploy.
+Record results and skipped tests. Passing checks does not prove deployment
+readiness: the manual release checklist also requires migration and worker-PDF
+validation. No clean-clone or production-image build is certified by this guide.
 
 ---
 
 ## 7. Deploying to Railway
 
-The repo is designed to deploy production as **three Railway services** in a single
-project, all pointing at the same GitHub repo on branch `main`. The branch flow is
-`dev → qa → main`: `dev` is day-to-day integration, `qa` is the release candidate,
-and `main` is production only. The web service and worker share code but run
-different commands. The worker is **not optional** — if you skip it, outreach emails
-won't send and newsletter jobs won't process.
+The deployment shape is a website, a worker and managed Postgres, plus S3 storage.
+The following service names are examples, not proof of a live Railway setup.
+Confirm project/environment/service IDs, source branches and auto-deploy settings
+before any release. Do not assume `qa` exists. The worker is required for scans,
+PDFs and queued jobs; it also retains legacy outreach handlers, which are not
+authorization to send prospect email through Resend. New services and deployment
+changes require owner approval.
 
 | Service | Type | Builder | Start command | Purpose |
 |---|---|---|---|---|
 | `Postgres` | Managed DB | — | — | App data + pg-boss queue (`pgboss` schema) |
 | `website` | App | Dockerfile (`./Dockerfile`) | `node .next/standalone/server.js` | Next.js web app |
-| `worker` | App | Dockerfile (`./Dockerfile.worker`) | `bun scripts/worker.ts` | pg-boss job processor |
+| `worker` | App | Dockerfile (`./Dockerfile.worker`) | `bun --conditions react-server scripts/worker.ts` | pg-boss job processor |
 
 The build configs are committed: `railway.json` (website) and
 `railway.worker.json` (worker). Railway picks them up automatically if you
-set the config path per service (step 4d below).
+set the config path per service (sections c and d below).
 
 ### Step-by-step
 
@@ -223,7 +204,7 @@ Dashboard → **+ New** → **GitHub Repo** → pick your repo.
 
 Then on the service:
 
-1. **Settings → Source** → set the repo branch to `main` for production. Use a separate Railway QA environment/service on branch `qa` if you want pre-production deploys.
+1. **Settings → Source** → use the owner-approved production branch. Confirm the configured source before release; provision a validation environment only with approval.
 2. **Settings → Build** → set **Config Path** to `railway.json`.
    This tells Railway to use `Dockerfile` as the builder.
 3. **Settings → Networking** → click **Generate Domain** to get a
@@ -237,10 +218,10 @@ Dashboard → **+ New** → **GitHub Repo** → pick the **same repo**.
 Then on the service:
 
 1. Rename it to `worker` (Settings → Service Name).
-2. **Settings → Source** → branch `main` for production. Mirror this service on branch `qa` in a QA environment if you need pre-production worker validation.
+2. **Settings → Source** → use the same approved release revision as the website. Do not assume a QA branch or environment already exists.
 3. **Settings → Build** → set **Config Path** to `railway.worker.json`.
    This makes Railway use `Dockerfile.worker` and start with
-   `bun scripts/worker.ts`.
+   `bun --conditions react-server scripts/worker.ts`.
 4. **Settings → Networking** → **do NOT generate a domain**. The worker is
    internal-only, no HTTP server.
 5. **Settings → Deploy** → confirm restart policy is `ON_FAILURE` with
@@ -311,80 +292,110 @@ running jobs. Minimum set:
 | `NEWSLETTER_FROM_EMAIL` | Same |
 | `UNSUBSCRIBE_SECRET` | Same |
 | `OUTREACH_CRON_SECRET` | Same (the worker self-triggers via the cron endpoint) |
-| `BUCKET_*` | Same five bucket vars as website |
+| `BUCKET_*` | Endpoint, region, media name, access key, secret key and path-style setting |
+| `INTEGRATION_ENCRYPTION_KEY` | Same stable key as website when decrypting shared integration credentials |
 | `NODE_ENV` | `production` |
 
-The simplest approach: **set every var on both services**. Slight duplication
-but zero chance of a missing var blowing up a job.
+These inherited integration variables are feature-dependent, not a requirement to
+enable email or AI services. Give each service only the credentials its enabled
+paths require. Check `.env.example` and the relevant handler before enabling a
+feature; do not copy every secret indiscriminately.
 
-### First deploy
+### Manual release checklist
 
-1. Make sure both services have their **Config Path** set (step c.2 and d.3).
-2. Push to `main` → both services build and deploy in parallel.
-3. Watch the **Deploy Logs** tab on each. First build takes ~3–5 min
-   (Docker layer cache is cold).
+This is a manual procedure, not an automated release or evidence of a deployment.
+`/commit` only makes a local commit. Obtain explicit owner approval before pushing,
+tagging/publishing, changing deployment configuration or touching production data.
+Hosted CI stays disabled; do not enable it to implement this procedure.
 
-### Apply the database schema (one-time)
+1. **Choose the candidate.** Record its commit, installed Bun/Node versions, target
+   Railway project/environment/services and currently deployed web/worker revisions.
+   Confirm the actual source branch and automatic deployment behavior. Prevent an
+   automatic rollout from racing migrations; if ordering cannot be controlled, stop.
+2. **Prepare version and notes.** `package.json` owns the application version. Choose
+   a SemVer bump with the owner (including breaking changes while pre-1.0). Update
+   the version and relevant lockfile metadata using Bun, inspect the diff, and move
+   the applicable `CHANGELOG.md` Unreleased bullets into `## [X.Y.Z] - YYYY-MM-DD`.
+   Keep an Unreleased section for subsequent changes. Do not invent a release date,
+   tag or past deployment. Include migration requirements and known limitations.
+3. **Verify a clean candidate.** In a fresh checkout, follow README setup with
+   `bun install --frozen-lockfile` and run the full local gate. Record actual results
+   and skipped coverage. Build both Docker images and test the production web server
+   and worker in an isolated environment with non-production data. PDF creation and
+   tenant-checked download must succeed. **The current worker image lacks Chromium
+   and its OS dependencies: resolve that separately with owner approval before a
+   PDF-capable release.** A successful image build alone does not prove PDFs work.
+4. **Prepare data recovery.** Review every pending SQL migration and `meta/` change
+   in `lib/db/drizzle/`. Preserve tenant constraints and additive, old/new-app-compatible
+   schema changes. Capture a database backup/snapshot and verify restore in isolation;
+   record its reference and the previous application revisions, never credentials.
+   Rehearse migrations against a representative disposable database first.
+5. **Apply migrations once, before dependent code.** In an approved operator checkout
+   of the candidate with development dependencies installed, securely inject the
+   target `DATABASE_URL` and run `bun run db:migrate`. Verify the target beforehand;
+   do not paste its credentials into commands, logs or release notes. Drizzle Kit
+   reads `drizzle.config.ts` and committed `lib/db/drizzle` migrations. Do not use
+   `db:push`, edit applied SQL, or assume a schema sync is harmless. The standalone
+   web image is not a migration shell and does not provide Bun/Drizzle tooling.
+   If a migration fails, stop deployment and inspect database state; do not blindly retry.
+6. **Deploy the approved revision.** Release web and worker to the verified targets
+   only after compatible migrations succeed. Verify web `/api/health`, admin login,
+   tenant access, a fixture/CSV scan, PDF creation/download and worker queue processing
+   in the approved validation environment. Do not send real prospect emails/SMS as a
+   smoke test. Record service revision IDs, observed results and remaining limitations.
+7. **Tag and communicate.** After successful verification, and only with publishing
+   approval, create an annotated `vX.Y.Z` tag pointing at the exact release commit.
+   Keep the existing repository visibility; share the corresponding changelog section
+   with the owner/operators through their approved private channel. Package version,
+   tag and release notes must agree. Do not repoint an existing release tag.
 
-The schema isn't auto-applied — you need to push it once after Postgres
-spins up. Two options:
+### Recovery if a release fails
 
-**Option A — from your laptop (easiest):**
+Stop promotion and prevent affected jobs from processing further with owner-approved
+operational controls. Redeploy the recorded previous web and worker revisions only
+if they remain compatible with the additive schema. Do not reverse migrations or
+restore a database automatically: restoration can lose writes since the backup.
+If compatibility is uncertain, stop and agree a recovery plan with the owner; prefer
+a reviewed forward repair, or an explicitly approved restore after reconciling new
+writes and queued jobs. Record the failed revision, recovery action and validation
+results in the release notes. Never rewrite published tags or claim an unsuccessful
+rollout as a successful release.
 
-```bash
-# Grab DATABASE_PUBLIC_URL from the Railway Postgres service → Variables
-DATABASE_URL="postgresql://...@<public-host>:<port>/railway" bun run db:push
-```
-
-**Option B — from Railway's web shell:**
-
-On the `website` service → **⋮ menu** → **Shell** →
-
-```bash
-bun run db:push
-```
-
-Drizzle will print every table it creates. Re-running is safe — it's an
-idempotent schema sync.
-
-pg-boss creates its own `pgboss.*` tables automatically when the worker boots
-for the first time — nothing to do there.
+pg-boss manages its own queue schema at worker startup; that does not replace
+application migrations.
 
 ### Verifying the worker is alive
 
-After the worker deploys, **Logs** should show:
+`scripts/worker.ts` logs these startup milestones:
 
-```
+```text
 [worker] pg-boss started
-[worker] subscribed to queue: newsletter:send
-[worker] subscribed to queue: outreach:send-email
-[worker] subscribed to queue: outreach:process
-...
+[worker] all handlers registered — waiting for jobs
 ```
 
-If you see those lines and no errors, the worker is processing jobs. To
-smoke-test it end-to-end, trigger an outreach send from the admin UI and
-watch the worker logs — you should see a job picked up and an email sent.
+Startup logs establish handler registration, not successful job processing. In an
+approved validation environment, run a fixture/CSV scan and confirm its completion,
+then request a report and verify PDF creation and tenant-checked download. Do not
+use an outreach email or real SMS send as a smoke test. The current Docker worker
+cannot be considered PDF-ready until Chromium provisioning is fixed and tested.
 
-If the worker is crashing on boot, 95% of the time it's a missing env var.
-Railway's logs will show exactly which one (the worker fails loudly).
+For startup failures, inspect the actual error and service configuration; do not
+assume all failures are missing environment variables.
 
 ### Scaling the worker
 
-The worker is single-instance by default. pg-boss handles concurrency
-_within_ one process via `teamSize` / `batchSize` options in
-`scripts/worker.ts`. If you need horizontal scaling later, you can bump
-`Settings → Deploy → Replicas` on the worker service — pg-boss is designed
-for multi-worker coordination and won't double-process jobs.
-
-For most workloads, **one worker replica is plenty**.
+Inspect the registered handlers and queue options in `scripts/worker.ts` before
+changing concurrency or replica counts. Queue coordination does not eliminate
+retries or duplicate external side effects; preserve handler idempotency. Replica
+changes require owner approval and validation against the workload, especially
+browser-backed PDF jobs.
 
 ### Auto-deploy on push
 
-Both services are wired to the `main` branch by default. Push to `main` →
-both redeploy in parallel. There's no staging branch — if you want one,
-add a `staging` branch on each service's Source settings and a second
-project for the staging env.
+Auto-deploy behavior is configured in Railway, not established by these files.
+Verify it before a release and follow the manual checklist above so pending
+migrations cannot race a web/worker rollout. Adding a staging environment or
+changing source branches requires owner approval.
 
 ### Cal.com webhook subdomain (only if you use Cal.com)
 
@@ -449,20 +460,18 @@ pass/fail per case.
 
 ---
 
-## 10. Known gaps to fill yourself
+## 10. Known release limitations
 
-These weren't part of the stripping pass — you'll want to handle them before
-shipping:
+- **Worker PDFs:** `Dockerfile.worker` lacks Chromium/OS dependency provisioning.
+  Local browser installation does not resolve the production-image blocker.
+- **Clean-clone verification:** documented steps are not a recorded successful build;
+  capture fresh install, gate and image validation results before releasing.
+- **Omkar:** live scanning remains UNVERIFIED; validate with fixture/CSV data instead.
+- **Twilio:** real delivery requires account/registration setup, a public callback
+  URL and live validation; an implemented inbox is not delivery evidence.
+- **Tenant onboarding:** the admin CLI exists, but creating a login alone does not
+  create tenant membership. Follow section 5.
 
-- **Documentation refresh** — `app/api/*/README.md` and
-  `lib/newsletter/emails/*.md` still contain the original brand name in
-  prose. Replace if you care, or delete if you don't.
-- **First admin user creation flow** — currently DB-only (section 5). If you
-  want a CLI or web signup, you'll need to wire it.
-- **Brand-specific copy in admin UI** — sidebar fallback names, login welcome
-  text, etc. all use `__YOUR_BRAND__` now; replace once and you're done.
-
----
-
-That's it. If something doesn't boot, check `.env.local` first (90% of issues),
-then `docker compose ps` to confirm Postgres + MinIO are healthy.
+For local failures, inspect the actual error and `docker compose ps`, including
+whether `minio-setup` completed successfully. Do not treat healthy services alone
+as evidence that migrations, tenant onboarding or report generation succeeded.

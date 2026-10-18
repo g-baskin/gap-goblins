@@ -1,4 +1,3 @@
-// @ts-nocheck — partial Supabase mocks cause type mismatches
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FetchResult } from "../../../types/article";
 import type { BaseSource } from "../../sources/base-source";
@@ -153,7 +152,7 @@ describe("MultiSourceFetcher", () => {
     expect(result.summary.successfulSources).toBe(1);
     expect(result.summary.failedSources).toBe(1);
     expect(result.articles).toHaveLength(1);
-    expect(result.articles[0].url).toBe("https://good.com/1");
+    expect(result.articles[0]).toMatchObject({ url: "https://good.com/1" });
   });
 
   it("deduplicates articles by URL", async () => {
@@ -223,7 +222,7 @@ describe("MultiSourceFetcher", () => {
     const result = await fetcher.fetchFromSources([s1, s2], ["wanted"]);
 
     expect(result.articles).toHaveLength(1);
-    expect(result.articles[0].url).toBe("https://a.com");
+    expect(result.articles[0]).toMatchObject({ url: "https://a.com" });
   });
 
   it("fetchFromSources returns empty for no matching names", async () => {

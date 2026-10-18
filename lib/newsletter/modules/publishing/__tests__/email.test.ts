@@ -1,9 +1,8 @@
-// @ts-nocheck — partial Supabase mocks cause type mismatches
 /**
  * Email Publisher Tests
  */
 
-import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createEmailPublisher, EmailPublisher } from "../email";
 import type { EmailRecipient, EmailSendOptions, EmailTemplate, UnsubscribeLink } from "../types";
 
@@ -18,7 +17,7 @@ vi.mock("resend", () => {
 
 describe("EmailPublisher", () => {
   let publisher: EmailPublisher;
-  let mockSend: Mock;
+  let mockSend: ReturnType<typeof vi.fn>;
 
   const testRecipient: EmailRecipient = {
     id: "sub_123",

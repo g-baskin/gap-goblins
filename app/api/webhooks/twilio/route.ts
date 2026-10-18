@@ -20,8 +20,12 @@ export async function POST(request: Request) {
     }
     const params = Object.fromEntries(new URLSearchParams(body));
     const url = new URL("/api/webhooks/twilio", publicBaseUrl).toString();
-    const result = await processTwilioWebhook({ signature, url, params });
-    return Response.json({ received: true, duplicate: result.duplicate });
+    await processTwilioWebhook({ signature, url, params });
+    // Empty TwiML: acknowledges the webhook without sending an automatic reply.
+    return new Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', {
+      status: 200,
+      headers: { "content-type": "text/xml; charset=utf-8" },
+    });
   } catch {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }

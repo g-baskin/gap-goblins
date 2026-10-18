@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { channelAccounts, contactIdentities } from "@/lib/db/schema";
-import { db } from "@/lib/db/worker";
+import { db as workerDb } from "@/lib/db/worker";
+import type { LeadFinderExecutor } from "@/lib/lead-finder/db";
 import type { GraphExternalHandlers } from "../graph/executor";
 import type { SmsProvider } from "./provider";
 
@@ -37,12 +38,20 @@ export function isQuietHour(
     : hour >= quietHours.start && hour < quietHours.end;
 }
 
-export async function resolveSmsSendGate(input: {
-  tenantId: string;
-  contactId: string;
-  channelAccountId: string;
-  now?: Date;
-}) {
+/**
+ * The one check every SMS send passes (automations and the inbox): an active SMS account with
+ * a sender number, a verified phone for the contact with recorded consent, no opt-out, and not
+ * inside the contact's quiet hours. Throws with a plain reason when any of these fail.
+ */
+export async function resolveSmsSendGate(
+  input: {
+    tenantId: string;
+    contactId: string;
+    channelAccountId: string;
+    now?: Date;
+  },
+  db: LeadFinderExecutor = workerDb,
+) {
   const [[account], [identity]] = await Promise.all([
     db
       .select()

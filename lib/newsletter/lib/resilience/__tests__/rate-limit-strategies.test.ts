@@ -1,4 +1,3 @@
-// @ts-nocheck — partial Supabase mocks cause type mismatches
 /**
  * Rate Limit Strategies Tests
  *

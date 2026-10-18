@@ -1,4 +1,4 @@
-import { Hr, Img, Link, Section, Text } from "@react-email/components";
+import { Hr, Img, Link, Section, Text } from "react-email";
 
 interface EmailFooterProps {
   unsubscribeUrl: string;

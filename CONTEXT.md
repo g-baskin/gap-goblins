@@ -31,4 +31,12 @@ _Avoid:_ rating (rating means the business's Google star rating).
 **Gap report**: the branded, deterministic HTML/PDF that explains a prospect's true gap flags and the tenant's call to action.
 _Avoid:_ audit, report card.
 
+**Territory**: a named area a tenant sells into, made of ZIP codes (with their Census outlines) and/or areas drawn on the map, stored in `lead_territories`. A scan can target one territory.
+
+**Territory status**: where a business sits relative to a scan's territory: inside, outside or unknown. Outside businesses are skipped and counted; unknown appears as "Not checked" and the business is kept.
+
+**Conversation**: one open thread of text messages with one contact (`conversation_threads`), shown in the Conversations inbox with unread count, star and last message.
+
+**SMS consent**: a recorded agreement from a contact to receive texts, with how it was given, their timezone, when and by whom (`contact_identities.metadata`). Texting in does not count as consent. Required before the inbox sends; STOP-type replies remove it.
+
 **Tenant branding**: a tenant's company name, logo, colours and call-to-action copy used on gap reports (`tenant_branding`).

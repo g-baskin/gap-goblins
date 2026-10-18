@@ -67,19 +67,20 @@ export async function POST(request: NextRequest) {
     const rawBody = body as Record<string, unknown>;
     const { profileSettings, notifications, preferences } = parsed.data;
     const skinId = typeof rawBody.skinId === "string" ? rawBody.skinId : undefined;
-    const avatarUrl = rawBody.avatarUrl as string | null | undefined;
+    // Asset references are written only by the authenticated upload/delete routes.
+    // Ignore legacy clients' avatarUrl fields rather than trusting a storage key.
     const hasProfileSettings = rawBody.profileSettings !== undefined;
     const hasNotifications = rawBody.notifications !== undefined;
     const hasPreferences = rawBody.preferences !== undefined;
 
-    if (hasProfileSettings || avatarUrl !== undefined) {
+    if (hasProfileSettings) {
       const fullName = `${profileSettings.firstName} ${profileSettings.lastName}`.trim();
       try {
         await db
           .update(adminUsers)
           .set({
-            ...(hasProfileSettings ? { name: fullName, jobTitle: profileSettings.jobTitle } : {}),
-            ...(avatarUrl !== undefined ? { avatarUrl: avatarUrl || null } : {}),
+            name: fullName,
+            jobTitle: profileSettings.jobTitle,
             updatedAt: new Date().toISOString(),
           })
           .where(eq(adminUsers.id, session.user.id));

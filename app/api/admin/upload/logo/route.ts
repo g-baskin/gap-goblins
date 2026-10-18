@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { siteSettings } from "@/lib/db/schema";
 import { deleteFile, uploadFile } from "@/lib/storage";
+import { ownedMediaKey } from "@/lib/storage/owned-media";
 
 const ALLOWED_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/svg+xml"]);
 const MAX_SIZE = 2 * 1024 * 1024; // 2 MB
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
     ext = detected.ext;
   }
 
-  const filename = generateFilename(ext);
+  const filename = `site-default--${generateFilename(ext)}`;
   const path = `logos/${filename}`;
 
   await uploadFile(path, buffer, { contentType: mimeType });
@@ -83,8 +84,8 @@ export async function POST(request: NextRequest) {
     .where(eq(siteSettings.id, "default"))
     .limit(1);
 
-  if (row?.logoUrl) {
-    const oldPath = row.logoUrl.replace(/^\/api\/media\//, "");
+  const oldPath = ownedMediaKey("logos", "site-default", row?.logoUrl);
+  if (oldPath) {
     deleteFile(oldPath).catch(() => {});
   }
 
@@ -113,8 +114,8 @@ export async function DELETE() {
     .where(eq(siteSettings.id, "default"))
     .limit(1);
 
-  if (row?.logoUrl) {
-    const oldPath = row.logoUrl.replace(/^\/api\/media\//, "");
+  const oldPath = ownedMediaKey("logos", "site-default", row?.logoUrl);
+  if (oldPath) {
     deleteFile(oldPath).catch(() => {});
   }
 

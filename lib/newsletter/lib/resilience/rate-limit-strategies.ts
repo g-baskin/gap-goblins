@@ -145,7 +145,7 @@ export class ConstantBackoff implements BackoffStrategy {
  * await rateLimitedFetch('https://reddit.com/r/Entrepreneur/hot.json');
  * ```
  */
-export function withRateLimit<T extends (...args: unknown[]) => Promise<unknown>>(
+export function withRateLimit<T extends (...args: never[]) => Promise<unknown>>(
   fn: T,
   rateLimiter: TokenBucketRateLimiter,
   tokens: number = 1,

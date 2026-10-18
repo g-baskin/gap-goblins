@@ -20,6 +20,8 @@ export function generateNonce(): string {
   return btoa(binary);
 }
 
+import { mapTileConfig, tileOrigin } from "@/lib/lead-finder/territories/map-tiles";
+
 /**
  * Build the Content-Security-Policy header value with a nonce.
  *
@@ -29,6 +31,8 @@ export function generateNonce(): string {
  * - Called from proxy.ts on every request with a fresh nonce
  */
 export function buildCspHeader(nonce: string): string {
+  // Territory map background tiles: only the configured tile host is allowed.
+  const mapTiles = tileOrigin(mapTileConfig().url);
   const directives = [
     "default-src 'self'",
     // sha256 hash covers Next.js RSC bootstrap script (self.__next_f=...) which
@@ -38,7 +42,7 @@ export function buildCspHeader(nonce: string): string {
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'sha256-TiyWB4YB4NUrUHDJSqaW0w0OtUb7i0Tddwwo6j0O07c=' 'sha256-HugGj5oR7f2UGBbrPIOJua5vPpKBIJj8354Z6gsKoUQ='${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""} https://app.cal.com`,
     "style-src 'self' 'unsafe-inline'",
     // Explicit allow-list for image hosts. Drop the open `https:` wildcard — known hosts only.
-    "img-src 'self' data: blob: https://images.unsplash.com https://framerusercontent.com https://lh3.googleusercontent.com https://api.qrserver.com",
+    `img-src 'self' data: blob: https://images.unsplash.com https://framerusercontent.com https://lh3.googleusercontent.com${mapTiles ? ` ${mapTiles}` : ""}`,
     "font-src 'self' data:",
     "connect-src 'self' https://app.cal.com",
     "media-src 'self'",

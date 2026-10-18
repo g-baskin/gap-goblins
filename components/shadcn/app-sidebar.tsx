@@ -8,6 +8,7 @@ import {
   IconNews,
   IconRoute,
   IconSettings,
+  IconTargetArrow,
   IconUsers,
 } from "@tabler/icons-react";
 import Image from "next/image";
@@ -36,6 +37,7 @@ const data = {
     { title: "Inbox", href: "/admin/inbox", icon: IconInbox },
     { title: "Conversations", href: "/admin/conversations", icon: IconMessages },
     { title: "Outreach", href: "/admin/outreach", icon: IconMail },
+    { title: "Lead Finder", href: "/admin/lead-finder", icon: IconTargetArrow },
     { title: "CRM", href: "/admin/crm", icon: IconUsers },
     { title: "Newsletter", href: "/admin/newsletter", icon: IconNews },
     { title: "Automation", href: "/admin/automation", icon: IconRoute },

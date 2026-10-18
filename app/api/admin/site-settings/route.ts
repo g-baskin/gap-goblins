@@ -34,12 +34,12 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const now = new Date().toISOString();
+    // logoUrl is server-issued by upload/logo, never assigned by settings JSON.
     const optionalTextFields = [
       "businessName",
       "abn",
       "phone",
       "email",
-      "logoUrl",
       "addressStreet",
       "addressCity",
       "addressState",

@@ -7,6 +7,8 @@
 import "server-only";
 import type { AutomationExecuteNodePayload } from "@/lib/automation/graph/executor";
 import type { AutomationSendStepPayload } from "@/lib/automation/types";
+import type { LeadReportJobPayload } from "@/lib/lead-finder/report-service";
+import type { LeadScanJobPayload } from "@/lib/lead-finder/scan-runner";
 import type {
   CleanupWorkflowPayload,
   CurateWorkflowPayload,
@@ -28,6 +30,8 @@ export const QUEUE = {
   AUTOMATION_SEND_STEP: "automation-send-step",
   AUTOMATION_EXECUTE_NODE: "automation-execute-node",
   AUTOMATION_RECONCILE: "automation-reconcile",
+  LEAD_SCAN_RUN: "lead-scan.run",
+  LEAD_REPORT_GENERATE: "lead-report.generate",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -147,4 +151,29 @@ export async function getQueueHealth(): Promise<{
     const message = error instanceof Error ? error.message : String(error);
     return { healthy: false, issues: [`pg-boss health check failed: ${message}`] };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Gap Goblins: Lead Finder
+// ---------------------------------------------------------------------------
+
+export async function enqueueLeadScan(payload: LeadScanJobPayload): Promise<string | null> {
+  const boss = await getBoss();
+  await boss.createQueue(QUEUE.LEAD_SCAN_RUN);
+  return boss.send(QUEUE.LEAD_SCAN_RUN, payload, {
+    retryLimit: 1,
+    retryDelay: 30,
+    expireInSeconds: 1800,
+    singletonKey: `lead-scan:${payload.scanId}`,
+  });
+}
+
+export async function enqueueLeadReport(payload: LeadReportJobPayload): Promise<string | null> {
+  const boss = await getBoss();
+  await boss.createQueue(QUEUE.LEAD_REPORT_GENERATE);
+  return boss.send(QUEUE.LEAD_REPORT_GENERATE, payload, {
+    retryLimit: 2,
+    retryDelay: 30,
+    expireInSeconds: 600,
+  });
 }

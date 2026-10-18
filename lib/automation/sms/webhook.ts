@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { validateRequest } from "twilio";
-import { z } from "zod";
+import type { CommunicationStatus } from "@/lib/conversations/domain";
 import { db } from "@/lib/db";
 import {
   automationActionOperations,
@@ -11,19 +11,51 @@ import {
   contactIdentities,
   providerWebhookEvents,
 } from "@/lib/db/schema";
+import { resolveTwilioCredentials } from "@/lib/messaging/credentials";
+import {
+  appendMessage,
+  findOrCreateContactByPhone,
+  findOrCreateOpenThread,
+  updateMessageStatus,
+} from "@/lib/messaging/inbox";
 
-const credentialsSchema = z.object({ authToken: z.string().min(1) }).passthrough();
+/** Carrier-standard opt-out and opt-in keywords (Twilio Advanced Opt-Out defaults). */
+const OPT_OUT_KEYWORDS = new Set([
+  "STOP",
+  "STOPALL",
+  "STOP ALL",
+  "UNSUBSCRIBE",
+  "CANCEL",
+  "END",
+  "QUIT",
+  "OPTOUT",
+  "OPT OUT",
+  "REVOKE",
+]);
+const OPT_IN_KEYWORDS = new Set(["START", "UNSTOP", "YES"]);
+const E164 = /^\+[1-9]\d{7,14}$/;
+
+/** Maps a Twilio message status to the inbox status; null when it is not worth showing. */
+export function twilioInboxStatus(status: string): CommunicationStatus | null {
+  const normalized = status.toLowerCase();
+  if (normalized === "sent") return "sent";
+  if (normalized === "delivered") return "delivered";
+  if (normalized === "read") return "read";
+  if (normalized === "failed" || normalized === "undelivered") return "failed";
+  return null;
+}
+
+function senderNumberOf(capabilities: unknown): string | null {
+  if (!capabilities || typeof capabilities !== "object") return null;
+  const value = (capabilities as Record<string, unknown>).senderNumber;
+  return typeof value === "string" ? value : null;
+}
 
 export function twilioOperationState(status: string): "succeeded" | "failed" | null {
   const normalized = status.toLowerCase();
   if (["delivered", "read"].includes(normalized)) return "succeeded";
   if (["failed", "undelivered"].includes(normalized)) return "failed";
   return null;
-}
-
-function secretValue(reference: string): string | null {
-  const match = /^env:([A-Z][A-Z0-9_]*)$/.exec(reference);
-  return match ? (process.env[match[1] as string] ?? null) : null;
 }
 
 export async function processTwilioWebhook(input: {
@@ -33,7 +65,11 @@ export async function processTwilioWebhook(input: {
 }) {
   const accountSid = input.params.AccountSid;
   if (!accountSid) throw new Error("Missing Twilio account identifier");
-  const [account] = await db
+  // An incoming text is addressed To our number; a delivery report comes From it. Matching the
+  // number as well as the account means a shared Twilio account can never cross workspaces.
+  const inbound = !input.params.MessageStatus && input.params.SmsStatus === "received";
+  const ourNumber = inbound ? input.params.To : input.params.From;
+  const candidates = await db
     .select()
     .from(channelAccounts)
     .where(
@@ -43,12 +79,14 @@ export async function processTwilioWebhook(input: {
         eq(channelAccounts.status, "active"),
       ),
     )
-    .limit(1);
+    .limit(50);
+  const account = candidates.find(
+    (candidate) => ourNumber && senderNumberOf(candidate.capabilities) === ourNumber,
+  );
   if (!account?.secretReference) throw new Error("Twilio account not configured");
-  const rawSecret = secretValue(account.secretReference);
-  if (!rawSecret) throw new Error("Twilio credentials unavailable");
-  const { authToken } = credentialsSchema.parse(JSON.parse(rawSecret));
-  const verified = validateRequest(authToken, input.signature, input.url, input.params);
+  const credentials = resolveTwilioCredentials(account.secretReference);
+  if (!credentials) throw new Error("Twilio credentials unavailable");
+  const verified = validateRequest(credentials.authToken, input.signature, input.url, input.params);
   const payloadHash = createHash("sha256")
     .update(JSON.stringify(Object.entries(input.params).sort(([a], [b]) => a.localeCompare(b))))
     .digest("hex");
@@ -121,10 +159,49 @@ export async function processTwilioWebhook(input: {
     }
   }
 
-  const command = input.params.Body?.trim().toUpperCase();
+  // Delivery reports for messages sent from the inbox.
+  if (!inbound && messageSid && messageStatus) {
+    const status = twilioInboxStatus(messageStatus);
+    if (status) {
+      const errorCode = input.params.ErrorCode;
+      await updateMessageStatus(
+        db,
+        account.tenantId,
+        account.id,
+        messageSid,
+        status,
+        status === "failed" ? `Twilio error ${errorCode || "unknown"}` : null,
+      );
+    }
+  }
+
   const from = input.params.From;
-  if (from && (command === "STOP" || command === "START")) {
-    const [identity] = await db
+  // Incoming text: file it under the sender's conversation, creating the contact if new.
+  if (inbound && from && E164.test(from)) {
+    const contact = await findOrCreateContactByPhone(db, account.tenantId, from, {
+      provenance: "inbound_sms",
+      verified: true,
+    });
+    const threadId = await findOrCreateOpenThread(db, account.tenantId, contact.contactId, "sms");
+    const mediaCount = Number(input.params.NumMedia ?? "0") || 0;
+    await appendMessage(db, {
+      tenantId: account.tenantId,
+      threadId,
+      contactId: contact.contactId,
+      channelAccountId: account.id,
+      direction: "inbound",
+      status: "received",
+      body: (input.params.Body ?? "").slice(0, 5000) || null,
+      occurredAt: new Date().toISOString(),
+      channelData: { messageSid: messageSid ?? null, mediaCount },
+    });
+  }
+
+  const command = input.params.Body?.trim().toUpperCase().replace(/\s+/g, " ");
+  const optOut = command !== undefined && OPT_OUT_KEYWORDS.has(command);
+  const optIn = command !== undefined && OPT_IN_KEYWORDS.has(command);
+  if (inbound && from && (optOut || optIn)) {
+    const identities = await db
       .select({ id: contactIdentities.id, metadata: contactIdentities.metadata })
       .from(contactIdentities)
       .where(
@@ -133,9 +210,8 @@ export async function processTwilioWebhook(input: {
           eq(contactIdentities.type, "phone"),
           eq(contactIdentities.normalizedValue, from),
         ),
-      )
-      .limit(1);
-    if (identity) {
+      );
+    for (const identity of identities) {
       const metadata =
         identity.metadata &&
         typeof identity.metadata === "object" &&
@@ -147,8 +223,9 @@ export async function processTwilioWebhook(input: {
         .set({
           metadata: {
             ...metadata,
-            smsConsent: command === "START",
-            dnd: command === "STOP",
+            smsConsent: optIn,
+            dnd: optOut,
+            consentSource: `Contact texted ${command}`,
             consentUpdatedAt: new Date().toISOString(),
           },
           updatedAt: new Date().toISOString(),

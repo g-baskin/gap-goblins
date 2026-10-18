@@ -41,7 +41,6 @@ export default function SecuritySettingsPage() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const [totpSecret, setTotpSecret] = useState("");
-  const [totpOtpauth, setTotpOtpauth] = useState("");
   const [totpToken, setTotpToken] = useState("");
   const [isSettingUp2FA, setIsSettingUp2FA] = useState(false);
   const [setup2FADialogOpen, setSetup2FADialogOpen] = useState(false);
@@ -84,7 +83,6 @@ export default function SecuritySettingsPage() {
       }
       const otpauthUrl = new URL(data.otpauth);
       setTotpSecret(otpauthUrl.searchParams.get("secret") || "");
-      setTotpOtpauth(data.otpauth);
       setSetup2FADialogOpen(true);
     } catch {
       toast.error("Failed to generate 2FA secret");
@@ -217,27 +215,25 @@ export default function SecuritySettingsPage() {
           <DialogHeader>
             <DialogTitle>Setup Two-Factor Authentication</DialogTitle>
             <DialogDescription>
-              Scan the QR code with your authenticator app and enter the verification code.
+              Add an account in your authenticator app using the setup key below. Choose time-based
+              codes, then enter the generated six-digit code. Your setup key is not sent to an
+              external QR service.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="flex justify-center p-4 bg-white rounded">
-              {totpOtpauth && (
-                /* biome-ignore lint/performance/noImgElement: QR code data URL preview */
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(totpOtpauth)}`}
-                  alt="2FA QR Code"
-                  className="w-48 h-48"
-                />
-              )}
-            </div>
             <div className="space-y-1.5">
-              <Label>Or enter this code manually:</Label>
+              <Label htmlFor="totpSecret">Setup key</Label>
               <div className="flex gap-2">
-                <Input value={totpSecret} readOnly className="font-mono text-sm bg-muted" />
+                <Input
+                  id="totpSecret"
+                  value={totpSecret}
+                  readOnly
+                  className="font-mono text-sm bg-muted"
+                />
                 <Button
                   variant="outline"
                   size="icon"
+                  aria-label="Copy setup key"
                   onClick={() => {
                     navigator.clipboard.writeText(totpSecret);
                     toast.success("Secret copied");

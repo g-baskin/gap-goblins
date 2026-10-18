@@ -5,6 +5,7 @@ import {
   IconBrandCloudflare,
   IconBuildingStore,
   IconMenu2,
+  IconMessage,
   IconPalette,
   IconShield,
   IconUser,
@@ -40,6 +41,7 @@ const NAV_SECTIONS = [
     label: "BUSINESS",
     items: [
       { title: "Business", href: "/admin/settings/business", icon: IconBuildingStore },
+      { title: "Messaging", href: "/admin/settings/messaging", icon: IconMessage },
       { title: "Cloudflare", href: "/admin/settings/cloudflare", icon: IconBrandCloudflare },
     ],
   },
